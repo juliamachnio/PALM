@@ -1,0 +1,54 @@
+## Setup
+#setup: moco # MoCo is used here
+#
+## Model
+#backbone: resnet50
+#model_kwargs:
+#   head: mlp
+#   features_dim: 128
+#
+## Dataset
+#train_db_name: imagenet_50
+#val_db_name: imagenet_50
+#num_classes: 50
+#temperature: 0.07
+#
+## Batch size and workers
+#batch_size: 50
+#num_workers: 8
+#
+## Transformations
+#transformation_kwargs:
+#   crop_size: 224
+#   normalize:
+#      mean: [0.485, 0.456, 0.406]
+#      std: [0.229, 0.224, 0.225]
+# Setup
+setup: dinov2  # Loading pretrained DINOv2 model
+
+# Model
+backbone: dinov2_vit  # Can also be vit_base or vit_large, depending on the weights
+backbone_kwargs:
+   model_size: vit_small  # or vit_base / vit_large
+   patch_size: 14  # Patch size (DINOv2 uses 14x14)
+
+model_kwargs:
+   patch_size: 16  # Default for DINOv2
+   features_dim: 384  # ViT-Small (adjust to 768 for ViT-Base, 1024 for ViT-Large)
+   use_head: false  # No need for projection head when extracting features
+
+# Dataset
+train_db_name: imagenet_50  # Keeping for consistency, but only validation is needed
+val_db_name: imagenet_50
+num_classes: 50  # Used for evaluation purposes
+
+# Transformations
+transformation_kwargs:
+   crop_size: 224  # Required input size for DINOv2
+   normalize:
+      mean: [0.485, 0.456, 0.406]  # Standard ImageNet normalization
+      std: [0.229, 0.224, 0.225]
+
+# Inference Settings
+use_pretrained: true  # Ensures that preloaded weights are used
+freeze_backbone: true  # Ensures no gradients are computed
