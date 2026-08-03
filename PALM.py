@@ -190,7 +190,9 @@ def main():
         "method": args.method,
         "episodes": len(x),
         "mode": model_used,
-        "budget_size": args.budget_size if args.x_mode == "cumulative_normalized" else None,
+        # Always persist the acquisition budget: ALDA uses it to turn episode
+        # indices in y_avg.npy into comparable cumulative label budgets.
+        "budget_size": float(args.budget_size),
         "A_max": float(A_max),
         "delta": float(delta),
         "alpha": float(alpha),
