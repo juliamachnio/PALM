@@ -4,6 +4,12 @@ This is the **official repository of “To Label or Not to Label: PALM – A Pre
 
 The goal of PALM is to provide a unified and interpretable mathematical model designed to **predict and analyze the behavior of Active Learning (AL) methods**.
 
+This repository brings together three connected active-learning contributions:
+
+1. **PALM** — a predictive model for active-learning learning curves.
+2. **ALDA** — a deployment advisor that uses PALM outputs to recommend a method for a target performance level; accepted for oral presentation at the EMA4MICCAI Workshops.
+3. **Mechanism-Driven Theory** — computational proxies, phase analysis, and a hard-switch baseline; its implementation is being added on this release branch.
+
 <table>
 <tr>
 <td width="50%" valign="top">
@@ -164,6 +170,198 @@ After running `PALM.py`, the following files will be saved in the directory spec
 > ```
 ---
 
+## 🩺 ALDA: Active Learning Deployment Advisor
+
+ALDA is the companion deployment-advisor workflow for PALM. It helps choose
+between active-learning methods after observing their early learning curves:
+
+```text
+active-learning experiment → PALM fit per method → ALDA recommendation
+```
+
+For every candidate method, ALDA reads the PALM output, fits the observed
+trajectory in a common cumulative-label space, and estimates the label budget
+needed to reach a target score. It recommends the reachable method with the
+lowest estimated budget.
+
+ALDA was accepted for oral presentation at the EMA4MICCAI Workshops under the
+title *Active Learning Deployment Advisor for Medical Image Classification*.
+
+### What ALDA needs
+
+The recommended interface consumes one output directory from `PALM.py` for
+each candidate method. Each directory must contain:
+
+| File | Produced by PALM | Used by ALDA |
+| --- | --- | --- |
+| `palm_params.json` | Fit metadata, including dataset, method, and acquisition budget | Identifies and aligns methods |
+| `y_avg.npy` | Mean score trajectory across selected runs | Fits the ALDA decision model |
+
+Run all candidate methods on the same dataset, task, evaluation metric, and
+data split. The methods may use different acquisition batch sizes; ALDA uses
+the budget stored by PALM to compare them in cumulative labeled samples.
+
+### Installation
+
+The ALDA core requires Python, NumPy, and SciPy. If you are using the bundled
+Deep-AL framework, install its dependencies from the repository root:
+
+```bash
+pip install -r deep-al/requirements.txt
+```
+
+For standalone PALM fitting, install at least:
+
+```bash
+pip install numpy scipy matplotlib
+```
+
+### Quick start
+
+#### 1. Run your candidate active-learning methods
+
+Each run should produce `plot_episode_yvalues.npy` under the output layout
+already supported by `PALM.py`:
+
+```text
+results/CIFAR10/resnet18/
+├── typiclust_1/plot_episode_yvalues.npy
+├── typiclust_2/plot_episode_yvalues.npy
+├── coreset_1/plot_episode_yvalues.npy
+└── coreset_2/plot_episode_yvalues.npy
+```
+
+#### 2. Fit PALM once per method
+
+From the repository root, create a separate PALM output directory for every
+method. Set `--budget_size` to the number of labels acquired per AL episode.
+
+```bash
+python PALM.py \
+  --base_path results/CIFAR10/resnet18 \
+  --dataset CIFAR10 \
+  --model resnet18 \
+  --method typiclust \
+  --num_variants 2 \
+  --budget_size 100 \
+  --out_dir palm_outputs/typiclust
+
+python PALM.py \
+  --base_path results/CIFAR10/resnet18 \
+  --dataset CIFAR10 \
+  --model resnet18 \
+  --method coreset \
+  --num_variants 2 \
+  --budget_size 100 \
+  --out_dir palm_outputs/coreset
+```
+
+#### 3. Ask ALDA for a recommendation
+
+Choose a target in percentage points. For example, a target of `80` means
+80% accuracy when PALM scores are percentages.
+
+```bash
+python deep-al/tools/alda/advisor.py \
+  --palm-output palm_outputs/typiclust palm_outputs/coreset \
+  --output-dir alda_outputs \
+  --target 80
+```
+
+ALDA writes two files:
+
+| File | Contents |
+| --- | --- |
+| `alda_fits.csv` | PALM parameters, fit quality, observed final score, and estimated budget at the target for every method |
+| `alda_advice.csv` | One recommendation per dataset, its target, decision reason, and estimated label budget |
+
+### Advising from partial trajectories
+
+To simulate a decision made before the full experiment is complete, pass only
+the first *N* observations from each PALM output:
+
+```bash
+python deep-al/tools/alda/advisor.py \
+  --palm-output palm_outputs/typiclust palm_outputs/coreset \
+  --output-dir alda_early_outputs \
+  --target 80 \
+  --max-points 8
+```
+
+At least four unique trajectory points are required for a fit. Early fits are
+estimates, not guarantees: use the fit quality in `alda_fits.csv`, compare
+methods under matched experimental conditions, and validate a recommendation
+before committing a large annotation budget.
+
+### Decision rule
+
+For each dataset, ALDA:
+
+1. Fits the PALM curve to every candidate method’s observed mean trajectory.
+2. Estimates the cumulative labels required to reach the requested target.
+3. Recommends the method with the lowest reachable estimate.
+4. If no method is estimated to reach the target, recommends the method with
+   the highest estimated asymptotic score and records that fallback reason.
+
+This makes the decision criterion explicit. It does not claim that a fitted
+curve eliminates experimental uncertainty or replaces domain validation.
+
+### Optional CSV interface
+
+Use `--input` only when curves come from an external active-learning framework
+and cannot be fitted by this repository’s `PALM.py` workflow. The CSV must
+contain these columns:
+
+```text
+dataset,method,cumulative_budget,score
+```
+
+Scores may be proportions (`0`–`1`) or percentages (`0`–`100`); the target
+must use the same scale as the input.
+
+```bash
+python deep-al/tools/alda/advisor.py \
+  --input external_curves.csv \
+  --output-dir alda_outputs \
+  --target 0.80
+```
+
+### Reproducibility and privacy
+
+ALDA does not require datasets, images, checkpoints, or patient-derived data
+to be committed to this repository. The forthcoming paper-reproduction layer
+will add dataset acquisition instructions, split manifests, configurations,
+and validation tools. Do not commit local run folders or generated ALDA/PALM
+outputs to the public repository.
+
+### Validation
+
+Run the synthetic smoke test from `deep-al/tools`:
+
+```bash
+python alda/tests/test_advisor.py
+```
+
+The test covers both the optional CSV path and the standard direct
+`PALM.py → ALDA` handoff.
+
+### Citation
+
+Citation metadata and the official paper link will be added once available.
+Until then, please refer to the paper title above and cite PALM when using the
+underlying learning-curve model.
+
+---
+
+## 🧭 Mechanism-Driven Theory
+
+The next component will add the computational proxies, phase/regime analysis,
+and proxy-derived `hard_switch` baseline from the mechanism-driven theory
+paper. It deliberately excludes ALPS, urgency estimation, and soft-allocation
+work, which belong to separate research projects.
+
+---
+
 ## 📚 Citing this Repository
 
 If you find **PALM** useful in your research, please consider citing our ICCV 2025 paper and the repositories our work builds upon.
@@ -232,4 +430,3 @@ This repository builds on concepts and frameworks designed by [TypiClust](https:
 
 ## License
 This toolkit and PALM is released under the MIT license. Please see the [LICENSE](LICENSE) file for more information.
-
