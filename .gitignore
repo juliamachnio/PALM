@@ -44,3 +44,31 @@ deep-al/plot_comparison.py
 deep-al/plot_supervised.py
 deep-al/plot.py
 scan/res50x1_batchsize_512.pkl
+
+# Public-release guardrails: never commit local research artifacts or credentials.
+.env
+.env.*
+*.key
+*.pem
+wandb/
+**/wandb/
+checkpoints/
+**/checkpoints/
+**/*.ckpt
+**/*.pth
+**/*.pth.tar
+**/*.pt
+**/slurm-*.out
+**/slurm-*.err
+**/out_*.txt
+**/err_*.txt
+private/
+**/private/
+rebuttal/
+**/rebuttal/
+
+# Keep later ALPS and rebuttal work out of the PALM public release.
+deep-al/pycls/al/phase_controller.py
+deep-al/pycls/al/soft_transition*.py
+deep-al/pycls/al/rebuttal_schedulers.py
+deep-al/pycls/al/branch_utility_alternatives.py
