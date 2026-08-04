@@ -17,6 +17,7 @@ from alda.advisor import (
     advise_from_palm_outputs,
     budget_at_target,
     deployment_window,
+    fit_palm,
     palm_model,
     rank_cost_competitive,
 )
@@ -45,7 +46,28 @@ class AdvisorTest(unittest.TestCase):
         fit = PalmFit(a_max=90.0, delta=0.1, alpha=0.0, beta=1.0, rmse=0.0, budget_size=10.0)
         budget = budget_at_target(fit, 45.0)
         self.assertIsNotNone(budget)
-        self.assertAlmostEqual(float(palm_model(np.array([budget]), 90, 0.1, 0, 1, 10)[0]), 45.0, places=5)
+        self.assertEqual(float(budget) % fit.budget_size, 0.0)
+        achieved = float(palm_model(np.array([budget]), 90, 0.1, 0, 1, 10)[0])
+        self.assertGreaterEqual(achieved, 45.0)
+        previous = float(palm_model(np.array([budget - fit.budget_size]), 90, 0.1, 0, 1, 10)[0])
+        self.assertLess(previous, 45.0)
+
+    def test_b_abs_rounds_up_to_next_episode(self) -> None:
+        # Eq. (2): B_abs is the smallest budget in Z>0, i.e. a multiple of
+        # budget_size, at which the curve reaches the target.
+        fit = PalmFit(a_max=90.0, delta=0.1, alpha=0.0, beta=1.0, rmse=0.0, budget_size=10.0)
+        budget = budget_at_target(fit, 40.0)
+        self.assertIsNotNone(budget)
+        self.assertEqual(float(budget) % fit.budget_size, 0.0)
+
+    def test_fit_palm_is_reproducible_with_fixed_seed(self) -> None:
+        budgets = np.arange(1, 9, dtype=float) * 10
+        curve = Curve(budgets, palm_model(budgets, 92, 0.09, 0, 1, 10), 10.0)
+        fit_a = fit_palm(curve, np.random.default_rng(7))
+        fit_b = fit_palm(curve, np.random.default_rng(7))
+        self.assertIsNotNone(fit_a)
+        self.assertIsNotNone(fit_b)
+        self.assertEqual(fit_a, fit_b)
 
     def test_deployment_window_is_positive_and_ceiling_safe(self) -> None:
         fit = PalmFit(a_max=90.0, delta=0.1, alpha=0.0, beta=1.0, rmse=0.0, budget_size=10.0)
@@ -72,6 +94,12 @@ class AdvisorTest(unittest.TestCase):
         self.assertTrue(candidates[0]["cost_competitive"])
         self.assertTrue(candidates[1]["cost_competitive"])
         self.assertFalse(candidates[2]["cost_competitive"])
+        # Risk is about W relative to the recommendation, not cost: the
+        # cheaper-but-wider-window method is risky; the pricier-but-narrower
+        # "too_costly" method is not cost-competitive yet still not risky.
+        self.assertTrue(candidates[0]["risky"])
+        self.assertFalse(candidates[1]["risky"])
+        self.assertFalse(candidates[2]["risky"])
 
     def test_feasible_and_infeasible_methods(self) -> None:
         budgets = np.arange(1, 9, dtype=float) * 10

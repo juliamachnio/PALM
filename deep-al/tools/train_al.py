@@ -396,7 +396,7 @@ def main(cfg):
 
     # df = pd.DataFrame(rankk_train_vall, columns=["Rankk"])
     # print(df)
-    # df.to_csv("/home/ju-ma/PycharmProjects/rankk/rankk_cifar10_simclr.csv", index=False)
+    # df.to_csv("{your_path}/rankk_cifar10_simclr.csv", index=False)
 
 
 

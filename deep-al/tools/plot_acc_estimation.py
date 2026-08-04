@@ -12,7 +12,7 @@ def rankk_model(x, acc_max, delta, alpha, betha):
 #     return acc_max * (1 - (1 - delta) ** (np.log(x + betha+1) ))
 
 # Base directory setup
-base_path = "/home/kgc221/rankk/output"
+base_path = "{your_path}/output"
 dataset = "CIFAR10"
 method = "random_nf"  # Single method
 num_variants = 5
@@ -91,7 +91,7 @@ print(f"acc_max: {acc_max:.4f}, delta: {delta:}, alpha: {alpha:}, betha: {betha:
 #     return acc_max * (1 - (1 - delta) ** ((x * b + betha) ** alpha))
 
 # # Load y_data from .npy file
-# path_1 = "/home/kgc221/rankk/output/CIFAR10/resnet18/random_nf_5/plot_episode_yvalues.npy"
+# path_1 = "{your_path}/output/CIFAR10/resnet18/random_nf_5/plot_episode_yvalues.npy"
 # y_data = np.load(path_1)
 
 # y_data = y_data[:]

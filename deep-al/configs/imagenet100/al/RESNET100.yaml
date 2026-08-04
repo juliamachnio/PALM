@@ -3,7 +3,7 @@ RNG_SEED: 1
 SETUP: moco
 DATASET:
   NAME: IMAGENET100
-  ROOT_DIR: '/home/ju-ma/PycharmProjects/rankk/scan/datasets/imagenet'
+  ROOT_DIR: './data/imagenet'  # point at your local ImageNet copy
   VAL_RATIO: 0.1
   AUG_METHOD: 'hflip'
 MODEL:

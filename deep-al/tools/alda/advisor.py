@@ -2,9 +2,11 @@
 """ALDA: risk-aware active-learning deployment advice.
 
 The primary workflow is ``active-learning runs -> PALM.py -> ALDA``.  ALDA
-fits the multiplicative PALM model to each observed pilot trajectory, screens
-methods for target feasibility, estimates annotation cost, and selects the
-most robust method among cost-competitive candidates.
+fits the multiplicative PALM model to each observed pilot trajectory via
+L-BFGS-B with seeded random restarts (paper §3.1), screens methods for
+target feasibility, estimates annotation cost (rounded up to the next AL
+episode per Eq. 2), and selects the most robust method among cost-competitive
+candidates.
 """
 
 from __future__ import annotations
@@ -19,13 +21,15 @@ from pathlib import Path
 from typing import Iterable
 
 import numpy as np
-from scipy.optimize import curve_fit
+from scipy.optimize import minimize
 
 
 EPS = 1e-8
 # Paper §3.4: do not estimate a deployment window arbitrarily close to the
 # fitted asymptote. Scores are normalized to percentage units before this cap.
 WINDOW_CEILING_MARGIN_PP = 0.5
+# Paper §3.1: number of L-BFGS-B random restarts per curve fit.
+N_RESTARTS = 18
 
 
 @dataclass(frozen=True)
@@ -59,8 +63,17 @@ def palm_model(
     return a_max * (1.0 - (1.0 - np.clip(delta, EPS, 1.0 - EPS)) ** inner)
 
 
-def fit_palm(curve: Curve, maxfev: int = 20_000) -> PalmFit | None:
-    """Fit PALM with deterministic multi-start optimization in episode space."""
+def fit_palm(
+    curve: Curve,
+    rng: np.random.Generator,
+    n_restarts: int = N_RESTARTS,
+    maxiter: int = 2000,
+) -> PalmFit | None:
+    """Fit PALM with multiple random restarts (paper §3.1).
+
+    ``rng`` drives the restart initial guesses; a fixed seed makes the fit
+    (and therefore B_abs/W) reproducible across runs.
+    """
     budgets, scores, budget_size = curve.budgets, curve.scores, curve.budget_size
     if len(budgets) < 4 or len(np.unique(budgets)) < 4:
         return None
@@ -68,33 +81,44 @@ def fit_palm(curve: Curve, maxfev: int = 20_000) -> PalmFit | None:
     observed_max = float(np.max(scores))
     max_episode = float(np.max(budgets) / budget_size)
     a_max_hi = max(100.0, observed_max * 1.25 + 1.0)
-    bounds = (
-        [observed_max, EPS, -max_episode, 0.05],
-        [a_max_hi, 1.0 - EPS, max_episode * 10.0 + 1.0, 10.0],
-    )
+    bounds = [
+        (observed_max, a_max_hi),
+        (EPS, 1.0 - EPS),
+        (-max_episode, max_episode * 10.0 + 1.0),
+        (0.05, 10.0),
+    ]
+    # Restart initial guesses are drawn from a moderate sub-range of the
+    # (deliberately wide) optimizer bounds, so restarts explore plausible
+    # curve shapes rather than mostly landing on numerically unstable points.
+    init_ranges = [
+        (observed_max, min(a_max_hi, observed_max * 1.5 + 1.0)),
+        (0.005, 0.4),
+        (-1.0, max(2.0, max_episode * 0.5)),
+        (0.2, 3.0),
+    ]
+
+    def objective(params: np.ndarray) -> float:
+        a_max, delta, alpha, beta = params
+        residual = palm_model(budgets, a_max, delta, alpha, beta, budget_size=budget_size) - scores
+        return float(np.dot(residual, residual))
+
     best: tuple[np.ndarray, float] | None = None
-
-    def model_for_fit(values: np.ndarray, a_max: float, delta: float, alpha: float, beta: float) -> np.ndarray:
-        return palm_model(values, a_max, delta, alpha, beta, budget_size=budget_size)
-
-    for delta0 in (0.01, 0.05, 0.2):
-        for alpha0 in (0.0, 1.0):
-            for beta0 in (0.5, 1.0, 2.0):
-                initial = [min(observed_max * 1.05, a_max_hi - EPS), delta0, alpha0, beta0]
-                try:
-                    params, _ = curve_fit(
-                        model_for_fit,
-                        budgets,
-                        scores,
-                        p0=initial,
-                        bounds=bounds,
-                        maxfev=maxfev,
-                    )
-                except (RuntimeError, ValueError, FloatingPointError):
-                    continue
-                rmse = float(np.sqrt(np.mean((scores - model_for_fit(budgets, *params)) ** 2)))
-                if best is None or rmse < best[1]:
-                    best = (params, rmse)
+    with np.errstate(over="ignore", invalid="ignore"):
+        for _ in range(n_restarts):
+            x0 = np.clip(
+                [rng.uniform(lo, hi) for lo, hi in init_ranges],
+                [b[0] for b in bounds],
+                [b[1] for b in bounds],
+            )
+            try:
+                result = minimize(objective, x0, method="L-BFGS-B", bounds=bounds, options={"maxiter": maxiter})
+            except (RuntimeError, ValueError, FloatingPointError):
+                continue
+            if not np.isfinite(result.fun):
+                continue
+            rmse = math.sqrt(max(result.fun, 0.0) / len(scores))
+            if best is None or rmse < best[1]:
+                best = (result.x, rmse)
     if best is None:
         return None
     params, rmse = best
@@ -104,8 +128,11 @@ def fit_palm(curve: Curve, maxfev: int = 20_000) -> PalmFit | None:
 def budget_at_target(fit: PalmFit, target: float) -> float | None:
     """Invert PALM to estimate labels required to reach a target score.
 
-    A target equal to the asymptotic ceiling is evaluated infinitesimally below
-    that ceiling to avoid the singular infinite-budget case.
+    Per Eq. (2), the result is rounded up to the next whole AL episode (a
+    multiple of ``fit.budget_size``): the smallest budget in Z>0 at which the
+    curve reaches ``target``. A target equal to the asymptotic ceiling is
+    evaluated infinitesimally below that ceiling to avoid the singular
+    infinite-budget case.
     """
     if target <= 0.0 or not 0.0 < fit.delta < 1.0 or fit.beta <= 0.0:
         return 0.0 if target <= 0.0 else None
@@ -118,8 +145,9 @@ def budget_at_target(fit: PalmFit, target: float) -> float | None:
     exponent = math.log(ratio) / math.log(1.0 - fit.delta)
     if exponent <= 0.0:
         return None
-    episodes = exponent ** (1.0 / fit.beta) - fit.alpha
-    return max(0.0, float(episodes * fit.budget_size))
+    raw_episodes = exponent ** (1.0 / fit.beta) - fit.alpha
+    episodes = max(0, math.ceil(raw_episodes - EPS))
+    return float(episodes * fit.budget_size)
 
 
 def deployment_window(fit: PalmFit, target: float, delta_target: float) -> float | None:
@@ -213,7 +241,14 @@ def normalize_score_scale(curves: dict[tuple[str, str], Curve]) -> tuple[dict[tu
 
 
 def rank_cost_competitive(candidates: list[dict[str, object]], eta: float) -> tuple[dict[str, object], float]:
-    """Mark C_eta and select the minimum-window method within the set."""
+    """Mark C_eta, select the minimum-window method, and flag deployment-risky alternatives.
+
+    Per 3.4/Algorithm 1, a feasible method is flagged as deployment-risky if
+    it is threshold-sensitive relative to the recommendation, i.e. its
+    deployment window W exceeds the selected method's W. Cost is judged
+    separately via C_eta, so a method can be flagged infeasible or not
+    cost-competitive without being "risky", and vice versa.
+    """
     b_min = min(float(row["b_abs"]) for row in candidates)
     denominator = max(b_min, EPS)
     competitive = []
@@ -221,9 +256,14 @@ def rank_cost_competitive(candidates: list[dict[str, object]], eta: float) -> tu
         relative_cost = (float(row["b_abs"]) - b_min) / denominator
         row["cost_competitive"] = relative_cost <= eta + EPS
         row["in_C_eta"] = row["cost_competitive"]
+        row["risky"] = False
         if bool(row["cost_competitive"]):
             competitive.append(row)
     selected = min(competitive, key=lambda row: (float(row["deployment_window"]), float(row["b_abs"])))
+    selected_window = float(selected["deployment_window"])
+    for row in candidates:
+        if row is not selected and float(row["deployment_window"]) > selected_window:
+            row["risky"] = True
     return selected, b_min
 
 
@@ -242,10 +282,12 @@ def advise_curves(
     delta_target: float | None,
     eta: float,
     max_points: int | None,
+    seed: int = 0,
 ) -> Path:
     """Run feasibility, cost, and risk-aware selection for all datasets."""
     if eta < 0.0:
         raise ValueError("eta must be non-negative")
+    rng = np.random.default_rng(seed)
     curves, fractional_scores = normalize_score_scale(raw_curves)
     target_percent = target * 100.0 if fractional_scores else target
     source_delta = 0.05 if fractional_scores else 5.0
@@ -260,7 +302,7 @@ def advise_curves(
     for (dataset, method), curve in sorted(curves.items()):
         if max_points is not None:
             curve = Curve(curve.budgets[:max_points], curve.scores[:max_points], curve.budget_size)
-        fit = fit_palm(curve)
+        fit = fit_palm(curve, rng)
         row: dict[str, object] = {
             "dataset": dataset,
             "method": method,
@@ -270,7 +312,7 @@ def advise_curves(
             "fit_status": "ok" if fit else "too_few_points_or_fit_failed",
             "a_max": "", "delta": "", "alpha": "", "beta": "", "rmse": "",
             "feasible": False, "b_abs": "", "deployment_window": "",
-            "window_over_b_abs": "", "cost_competitive": False,
+            "window_over_b_abs": "", "cost_competitive": False, "risky": False,
             "A_max": "", "B_abs": "", "W": "", "W_over_B_abs": "", "in_C_eta": False,
         }
         if fit:
@@ -338,7 +380,7 @@ def advise_curves(
         output_dir / "alda_fits.csv",
         ["dataset", "method", "points_used", "budget_size", "observed_final_score", "fit_status",
          "a_max", "delta", "alpha", "beta", "rmse", "feasible", "b_abs",
-         "deployment_window", "window_over_b_abs", "cost_competitive", "A_max", "B_abs", "W",
+         "deployment_window", "window_over_b_abs", "cost_competitive", "risky", "A_max", "B_abs", "W",
          "W_over_B_abs", "in_C_eta"],
         fit_rows,
     )
@@ -361,16 +403,25 @@ def advise(
     eta: float,
     max_points: int | None,
     budget_size: float | None = None,
+    seed: int = 0,
 ) -> Path:
     """Run ALDA from a portable external curve CSV."""
-    return advise_curves(load_curves(input_path, budget_size), output_dir, target, delta_target, eta, max_points)
+    return advise_curves(
+        load_curves(input_path, budget_size), output_dir, target, delta_target, eta, max_points, seed
+    )
 
 
 def advise_from_palm_outputs(
-    paths: Iterable[Path], output_dir: Path, target: float, delta_target: float | None, eta: float, max_points: int | None
+    paths: Iterable[Path],
+    output_dir: Path,
+    target: float,
+    delta_target: float | None,
+    eta: float,
+    max_points: int | None,
+    seed: int = 0,
 ) -> Path:
     """Run ALDA from one PALM output directory per candidate method."""
-    return advise_curves(load_palm_outputs(paths), output_dir, target, delta_target, eta, max_points)
+    return advise_curves(load_palm_outputs(paths), output_dir, target, delta_target, eta, max_points, seed)
 
 
 def parse_args() -> argparse.Namespace:
@@ -390,6 +441,10 @@ def parse_args() -> argparse.Namespace:
         "--budget-size", type=float, default=None,
         help="Override inferred labels-per-episode for the optional CSV interface only.",
     )
+    parser.add_argument(
+        "--seed", type=int, default=0,
+        help="Seed for the L-BFGS-B random-restart curve fit, for reproducibility (default: 0).",
+    )
     return parser.parse_args()
 
 
@@ -397,10 +452,11 @@ if __name__ == "__main__":
     args = parse_args()
     if args.palm_output:
         advice = advise_from_palm_outputs(
-            args.palm_output, args.output_dir, args.target, args.delta_target, args.eta, args.max_points
+            args.palm_output, args.output_dir, args.target, args.delta_target, args.eta, args.max_points, args.seed
         )
     else:
         advice = advise(
-            args.input, args.output_dir, args.target, args.delta_target, args.eta, args.max_points, args.budget_size
+            args.input, args.output_dir, args.target, args.delta_target, args.eta, args.max_points,
+            args.budget_size, args.seed,
         )
     print(f"Wrote ALDA recommendation: {advice}")

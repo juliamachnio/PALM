@@ -1,10 +1,17 @@
 # Repository Overview
 
-This repository brings together three connected active-learning contributions:
+This repository brings together two connected active-learning contributions:
 
-1. **[PALM](#palm)** — a predictive model for active-learning learning curves. [Paper (ICCV 2025)](https://openaccess.thecvf.com/content/ICCV2025/html/Machnio_To_Label_or_Not_to_Label_PALM_-_A_Predictive_ICCV_2025_paper.html)
-2. **[ALDA](#alda)** — a deployment advisor that uses PALM outputs to recommend a method for a target performance level; accepted for oral presentation at the EMA4MICCAI Workshops. Official workshop link forthcoming.
-3. **[Mechanism-Driven Theory](#mechanism-driven-theory)** — the next planned repository extension, covering computational proxies, phase analysis, and a hard-switch baseline. [Preprint (ECCV 2026)](https://arxiv.org/abs/2607.00144)
+| Component | Purpose | Repository section | Paper |
+| --- | --- | --- | --- |
+| **PALM** | Predicts and explains active-learning learning curves with interpretable parameters. | [PALM](#palm) | [ICCV 2025 paper](https://openaccess.thecvf.com/content/ICCV2025/html/Machnio_To_Label_or_Not_to_Label_PALM_-_A_Predictive_ICCV_2025_paper.html) |
+| **ALDA** | Turns PALM pilot forecasts into risk-aware deployment recommendations. | [ALDA](#alda) | Official workshop link forthcoming |
+
+# 🌴 [ICCV25] PALM: *Performance Analysis of Active Learning Models*
+
+This is the **official repository of “To Label or Not to Label: PALM – A Predictive Model for Evaluating Sample Efficiency in Active Learning Models”**, presented at **ICCV 2025**.
+
+The goal of PALM is to provide a unified and interpretable mathematical model designed to **predict and analyze the behavior of Active Learning (AL) methods**.
 
 <table>
 <tr>
@@ -23,12 +30,6 @@ PALM provides a **predictive description** of learning dynamics from partial obs
 </td>
 </tr>
 </table>
-
-# 🌴 [ICCV25] PALM: *Performance Analysis of Active Learning Models*
-
-This is the **official repository of “To Label or Not to Label: PALM – A Predictive Model for Evaluating Sample Efficiency in Active Learning Models”**, presented at **ICCV 2025**.
-
-The goal of PALM is to provide a unified and interpretable mathematical model designed to **predict and analyze the behavior of Active Learning (AL) methods**.
 
 <div style="display: flex; justify-content: center;">
   <img src="Page 2.png" alt="PALM curve visualization" style="max-width: 100%; height: auto;" />
@@ -160,7 +161,7 @@ After running `PALM.py`, the following files will be saved in the directory spec
 | `--num_variants` | Number of repeated runs to average (e.g. 5 for `_1`, `_2`, `_3`, `_4`, `_5`) |
 | `--num_samples` | Number of Active Learning episodes to use per run (`-1` = use all) |
 | `--x_mode` | X-axis type: `episodes` (default) or `cumulative_normalized` |
-| `--budget_size` | Budget per episode (only used if `x_mode=cumulative_normalized`) |
+| `--budget_size` | Budget per episode. Only affects the curve fit itself if `x_mode=cumulative_normalized`, but is always saved to `palm_params.json` and used by ALDA to convert episode indices into cumulative label counts — set it correctly regardless of `x_mode` |
 | `--out_dir` | Directory to save PALM outputs (default: `./palm_fit_out`) |
 | `--plot` | Display and save the fitted PALM curve as a figure |
 | `--save_csv` | Save fitted parameters to `palm_params.csv` in addition to JSON |
@@ -173,7 +174,6 @@ After running `PALM.py`, the following files will be saved in the directory spec
 > ```
 ---
 
-<a id="alda"></a>
 
 ## 🩺 [Oral EMA4MICCAI Workshops 2026] ALDA: Active Learning Deployment Advisor
 
@@ -337,7 +337,7 @@ results/CIFAR10/resnet18/
 ├── coreset_1/plot_episode_yvalues.npy
 └── coreset_2/plot_episode_yvalues.npy
 ```
-At least four unique trajectory points are required for fitting. In practice, larger pilot prefixes provide more reliable extrapolation; the ALDA experiments evaluate pilot fractions between 10% and 30%.
+At least four unique trajectory points are required for fitting. In practice, larger pilot prefixes provide more reliable extrapolation; the ALDA experiments identify label-efficient strategies from a pilot of 15–30% of the intended budget.
 
 #### 2. Fit PALM for every candidate method
 
@@ -395,7 +395,7 @@ ALDA stores the deployment analysis in the directory specified by `--output-dir`
 
 | File | Contents |
 |------|----------|
-| `alda_fits.csv` | Method-level PALM parameters, RMSE, feasibility, `B_abs`, deployment window `W`, `W / B_abs`, and cost-competitive membership (`C_eta`) |
+| `alda_fits.csv` | Method-level PALM parameters, RMSE, feasibility, `B_abs`, deployment window `W`, `W / B_abs`, cost-competitive membership (`C_eta`), and a `risky` flag for feasible methods whose `W` exceeds the recommendation's `W` |
 | `alda_advice.csv` | Target, target uncertainty, `eta`, selected method, `selected_B_abs`, `selected_W`, and decision reason |
 
 These outputs allow the candidate strategies and their predicted deployment requirements to be inspected before committing the remaining annotation budget.
@@ -487,16 +487,6 @@ and the optional external CSV interface.
 
 ---
 
-<a id="mechanism-driven-theory"></a>
-
-## 🧭 Coming Next: Mechanism-Driven Theory
-
-The next repository extension will add the implementation accompanying *A Mechanism-Driven Theory of Phase Transitions in Active Learning* (ECCV 2026), including operational proxies, phase-transition analysis, segmented-regression transition detection, and the proxy-derived switching baseline.
-
-This component is not implemented in the current ALDA release.
-
----
-
 ## 📚 Citing this Repository
 
 If you find **PALM** useful in your research, please consider citing our ICCV 2025 paper and the repositories our work builds upon.
@@ -524,17 +514,6 @@ This repository builds on concepts and frameworks designed by [TypiClust](https:
   title={How Many Labels Are Enough? ALDA: Active Learning Deployment Advisor for Medical Image Classification},
   author={Machnio, Julia and Nielsen, Mads and Ghazi, Mostafa Mehdipour},
   booktitle={EMA4MICCAI Workshop at MICCAI},
-  year={2026}
-}
-```
-
-### 🧭 Mechanism-Driven Theory (ECCV 2026)
-
-```bibtex
-@article{machnio2026mechanism,
-  title={A Mechanism-Driven Theory of Phase Transitions in Active Learning},
-  author={Machnio, Julia and Nielsen, Mads and Ghazi, Mostafa Mehdipour},
-  journal={arXiv preprint arXiv:2607.00144},
   year={2026}
 }
 ```

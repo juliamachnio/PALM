@@ -2,8 +2,8 @@ import os
 from collections import Counter
 
 # Paths
-IMAGENET_DIR = "/home/ju-ma/PycharmProjects/rankk/scan/imagenet/ILSVRC/Data/CLS-LOC"
-SUBSET_DIR = "/home/ju-ma/PycharmProjects/rankk/scan/data/imagenet_subsets"
+IMAGENET_DIR = "{your_path}/scan/imagenet/ILSVRC/Data/CLS-LOC"
+SUBSET_DIR = "{your_path}/scan/data/imagenet_subsets"
 
 
 def load_classes(subset_file):
@@ -16,7 +16,7 @@ def count_images(split_dir, classes):
     for cls in classes:
         class_dir = os.path.join(split_dir, cls)
         if not os.path.exists(class_dir):
-            print(f"⚠️ Warning: Class {cls} not found in {split_dir}")
+            print(f" Warning: Class {cls} not found in {split_dir}")
             counts[cls] = 0
             continue
         counts[cls] = len([f for f in os.listdir(class_dir) if f.lower().endswith(".jpeg")])

@@ -113,7 +113,7 @@ class ImageNet(datasets.ImageFolder):
     def load_wnid_to_classes(self):
         """Load mappings from WordNet IDs (wnids) to class names."""
         wnid_to_classes = {}
-        mapping_file = '/home/ju-ma/PycharmProjects/rankk/scan/datasets/imagenet/LOC_synset_mapping.txt'
+        mapping_file = '{your_path}/scan/datasets/imagenet/LOC_synset_mapping.txt'  # fill in your local ImageNet root
         if not os.path.exists(mapping_file):
             raise FileNotFoundError(f"Mapping file not found at {mapping_file}. Ensure it exists.")
         with open(mapping_file, 'r') as file:

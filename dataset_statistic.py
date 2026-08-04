@@ -2,7 +2,7 @@ import os
 import pickle
 from collections import Counter
 
-DATASET_DIR = "/home/ju-ma/PycharmProjects/rankk/scan/datasets"
+DATASET_DIR = "{your_path}/scan/datasets"
 
 def load_cifar_batch(file_path, encoding="latin1"):
     """Load a single CIFAR batch."""

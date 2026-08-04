@@ -5,7 +5,7 @@ from scipy.optimize import curve_fit
 
 params_table = {}
 
-base_path = "/home/ju-ma/PycharmProjects/rankk/output"
+base_path = "{your_path}/output"
 dataset = "IMAGENET50"
 model = "resnet50"
 # methods = ["random_ff"]

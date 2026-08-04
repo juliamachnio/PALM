@@ -78,6 +78,8 @@ _C.MODEL.TYPE = ''
 _C.MODEL.NUM_CLASSES = 10
 # Loss function (see pycls/models/loss.py for options)
 _C.MODEL.LOSS_FUN = 'cross_entropy'
+# Whether Data.getDataset() should load precomputed features instead of images
+_C.MODEL.LINEAR_FROM_FEATURES = False
 
 
 # ---------------------------------------------------------------------------- #
@@ -229,7 +231,7 @@ _C.DATASET.VAL_RATIO = 0.1
 # Data augmentation methods - 'simclr', 'randaug', 'hflip'
 _C.DATASET.AUG_METHOD = 'hflip' 
 # Accepted Datasets
-_C.DATASET.ACCEPTED = ['MNIST','SVHN','CIFAR10','CIFAR100','TINYIMAGENET', 'IMBALANCED_CIFAR10', 'IMBALANCED_CIFAR100', 'IMAGENET50', 'IMAGENET100', 'IMAGENET200']
+_C.DATASET.ACCEPTED = ['MNIST','SVHN','CIFAR10','CIFAR100','TINYIMAGENET', 'IMBALANCED_CIFAR10', 'IMBALANCED_CIFAR100', 'IMAGENET50', 'IMAGENET100', 'IMAGENET200', 'BUSI', 'ISIC2019', 'BRISC2025', 'FETALPLANES']
 
 def assert_cfg():
     """Checks config values invariants."""
