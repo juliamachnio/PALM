@@ -242,7 +242,7 @@ Methods whose predicted performance ceiling lies below the target are flagged as
 
 For each feasible method, ALDA estimates the minimum number of labels required to reach the target:
 
-$$ B_{\mathrm{abs}}^{(m)}(\tau) = \min \left\{B : A_m(B) \geq \tau\right\}. $$
+$$ B_{\mathrm{abs}}^{(m)}(\tau) = \min \{ B \mid A_m(B) \geq \tau \}. $$
 
 This converts the predicted learning curve into an interpretable deployment quantity:
 
@@ -276,7 +276,7 @@ $$ B_{\min} = \min_{m \in \mathcal{M}_{\mathrm{feas}}} B_{\mathrm{abs}}^{(m)}(\t
 
 and constructs a set of cost-competitive methods
 
-$$ \mathcal{C}_{\eta} = \left\{m : \frac{B_{\mathrm{abs}}^{(m)}(\tau)-B_{\min}}{B_{\min}} \leq \eta\right\}. $$
+$$ \mathcal{C}_{\eta} = \{ m \mid \frac{B_{\mathrm{abs}}^{(m)}(\tau)-B_{\min}}{B_{\min}} \leq \eta \}. $$
 
 where \(\eta\) defines the tolerated relative increase in annotation cost.
 
@@ -509,14 +509,7 @@ This repository builds on concepts and frameworks designed by [TypiClust](https:
 
 ### 🩺 ALDA (EMA4MICCAI Workshops 2026)
 
-```bibtex
-@inproceedings{machnio2026alda,
-  title={How Many Labels Are Enough? ALDA: Active Learning Deployment Advisor for Medical Image Classification},
-  author={Machnio, Julia and Nielsen, Mads and Ghazi, Mostafa Mehdipour},
-  booktitle={EMA4MICCAI Workshop at MICCAI},
-  year={2026}
-}
-```
+> Citation to be added after the official workshop publication details are available.
 
 ### 📘 Related References
 
