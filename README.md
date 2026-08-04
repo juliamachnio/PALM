@@ -4,11 +4,15 @@ This is the **official repository of “To Label or Not to Label: PALM – A Pre
 
 The goal of PALM is to provide a unified and interpretable mathematical model designed to **predict and analyze the behavior of Active Learning (AL) methods**.
 
-This repository brings together three connected active-learning contributions:
+## Repository overview
 
-1. **PALM** — a predictive model for active-learning learning curves.
-2. **ALDA** — a deployment advisor that uses PALM outputs to recommend a method for a target performance level; accepted for oral presentation at the EMA4MICCAI Workshops.
-3. **Mechanism-Driven Theory** — the next planned repository extension, covering computational proxies, phase analysis, and a hard-switch baseline.
+This repository brings together three connected active-learning contributions. Use the links below to jump directly to each component.
+
+| Component | Purpose | Repository section | Paper |
+| --- | --- | --- | --- |
+| **PALM** | Predicts and explains active-learning learning curves with interpretable parameters. | [PALM](#palm) | [ICCV 2025 paper](https://openaccess.thecvf.com/content/ICCV2025/html/Machnio_To_Label_or_Not_to_Label_PALM_-_A_Predictive_ICCV_2025_paper.html) |
+| **ALDA** | Turns PALM pilot forecasts into risk-aware deployment recommendations. | [ALDA](#alda) | Official workshop link forthcoming |
+| **Mechanism-Driven Theory** | Upcoming operational-proxy, phase-transition, and hard-switch implementation. | [Coming next](#mechanism-driven-theory) | [ECCV 2026 preprint](https://arxiv.org/abs/2607.00144) |
 
 <table>
 <tr>
@@ -34,6 +38,8 @@ PALM provides a **predictive description** of learning dynamics from partial obs
 </div>
 
 ---
+
+<a id="palm"></a>
 
 ## 🏝️ The PALM Model
 
@@ -170,6 +176,8 @@ After running `PALM.py`, the following files will be saved in the directory spec
 > ```
 ---
 
+<a id="alda"></a>
+
 ## 🩺 [Oral EMA4MICCAI Workshops 2026] ALDA: Active Learning Deployment Advisor
 
 > *How Many Labels Are Enough? ALDA: Active Learning Deployment Advisor for Medical Image Classification*
@@ -214,18 +222,7 @@ pilot Active Learning trajectories
 
 For every candidate Active Learning method \(m\), ALDA fits the PALM learning curve to the early pilot results:
 
-$$
-A(B) =
-A_{\max} \cdot
-\left[
-1 -
-(1-\delta)^{
-\left(
-\frac{B}{b}+\alpha
-\right)^\beta
-}
-\right],
-$$
+$$ A(B) = A_{\max} \cdot \left[1 - (1-\delta)^{\left(\frac{B}{b}+\alpha\right)^\beta}\right]. $$
 
 where \(B\) is the cumulative annotation budget and
 \(\theta_m=\{A_{\max},\delta,\alpha,\beta\}\) are fitted from the observed pilot trajectory.
@@ -248,15 +245,7 @@ Methods whose predicted performance ceiling lies below the target are flagged as
 
 For each feasible method, ALDA estimates the minimum number of labels required to reach the target:
 
-$$
-B_{\mathrm{abs}}^{(m)}(\tau)
-=
-\min
-\left\{
-B :
-A_m(B) \geq \tau
-\right\}.
-$$
+$$ B_{\mathrm{abs}}^{(m)}(\tau) = \min \left\{B : A_m(B) \geq \tau\right\}. $$
 
 This converts the predicted learning curve into an interpretable deployment quantity:
 
@@ -274,13 +263,7 @@ $$
 
 ALDA defines the deployment window
 
-$$
-W^{(m)}
-=
-B_{\mathrm{abs}}^{(m)}(\tau+\Delta\tau)
--
-B_{\mathrm{abs}}^{(m)}(\tau-\Delta\tau).
-$$
+$$ W^{(m)} = B_{\mathrm{abs}}^{(m)}(\tau+\Delta\tau) - B_{\mathrm{abs}}^{(m)}(\tau-\Delta\tau). $$
 
 A small \(W\) indicates that the estimated annotation requirement is relatively stable when the target changes. A large \(W\) indicates a threshold-sensitive strategy whose annotation cost may increase substantially after even a small revision of the required performance.
 
@@ -292,39 +275,17 @@ Selecting the method with the smallest predicted annotation cost alone can be un
 
 ALDA therefore first identifies the lowest predicted cost
 
-$$
-B_{\min}
-=
-\min_{m \in \mathcal{M}_{\mathrm{feas}}}
-B_{\mathrm{abs}}^{(m)}(\tau),
-$$
+$$ B_{\min} = \min_{m \in \mathcal{M}_{\mathrm{feas}}} B_{\mathrm{abs}}^{(m)}(\tau). $$
 
 and constructs a set of cost-competitive methods
 
-$$
-\mathcal{C}_{\eta}
-=
-\left\{
-m :
-\frac{
-B_{\mathrm{abs}}^{(m)}(\tau)-B_{\min}
-}{
-B_{\min}
-}
-\leq \eta
-\right\},
-$$
+$$ \mathcal{C}_{\eta} = \left\{m : \frac{B_{\mathrm{abs}}^{(m)}(\tau)-B_{\min}}{B_{\min}} \leq \eta\right\}. $$
 
 where \(\eta\) defines the tolerated relative increase in annotation cost.
 
 Among these near-optimal methods, ALDA recommends the strategy with the smallest deployment window:
 
-$$
-m^*
-=
-\arg\min_{m\in\mathcal{C}_{\eta}}
-W^{(m)}.
-$$
+$$ m^* = \arg\min_{m\in\mathcal{C}_{\eta}} W^{(m)}. $$
 
 Thus:
 
@@ -528,6 +489,8 @@ PALM output → ALDA
 and the optional external CSV interface.
 
 ---
+
+<a id="mechanism-driven-theory"></a>
 
 ## 🧭 Coming Next: Mechanism-Driven Theory
 
