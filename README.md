@@ -170,9 +170,7 @@ After running `PALM.py`, the following files will be saved in the directory spec
 > ```
 ---
 
-## 🩺 ALDA: Active Learning Deployment Advisor
-
-ALDA was accepted for **oral presentation at the EMA4MICCAI Workshops** under the title:
+## 🩺 [Oral EMA4MICCAI Workshops 2026] ALDA: Active Learning Deployment Advisor
 
 > *How Many Labels Are Enough? ALDA: Active Learning Deployment Advisor for Medical Image Classification*
 
@@ -182,7 +180,7 @@ ALDA was accepted for **oral presentation at the EMA4MICCAI Workshops** under th
   </a>
 </p>
 
-<p align="center"><em>ALDA converts pilot learning curves into a risk-aware active-learning deployment recommendation. Click the figure for the PDF version.</em></p>
+<p align="center"><em>ALDA converts pilot learning curves into a risk-aware active-learning deployment recommendation. </em></p>
 
 **ALDA turns early learning-curve forecasts into prospective Active Learning deployment decisions.**
 
