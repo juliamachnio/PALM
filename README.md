@@ -175,6 +175,8 @@ After running `PALM.py`, the following files will be saved in the directory spec
 ---
 
 
+<a id="alda"></a>
+
 ## 🩺 [Oral EMA4MICCAI Workshops 2026] ALDA: Active Learning Deployment Advisor
 
 > *How Many Labels Are Enough? ALDA: Active Learning Deployment Advisor for Medical Image Classification*
@@ -467,23 +469,6 @@ python deep-al/tools/alda/advisor.py \
 ```
 
 Scores may be represented either as proportions (`0–1`) or percentages (`0–100`), but the target must use the same scale.
-
-
-### ✅ Validation
-
-A synthetic smoke test is available under `deep-al/tools`:
-
-```bash
-python alda/tests/test_advisor.py
-```
-
-The test covers both:
-
-```text
-PALM output → ALDA
-```
-
-and the optional external CSV interface.
 
 ---
 
