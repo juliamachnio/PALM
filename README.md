@@ -1,18 +1,10 @@
-# 🌴 [ICCV25] PALM: *Performance Analysis of Active Learning Models*
+# Repository Overview
 
-This is the **official repository of “To Label or Not to Label: PALM – A Predictive Model for Evaluating Sample Efficiency in Active Learning Models”**, presented at **ICCV 2025**.
+This repository brings together three connected active-learning contributions:
 
-The goal of PALM is to provide a unified and interpretable mathematical model designed to **predict and analyze the behavior of Active Learning (AL) methods**.
-
-## Repository overview
-
-This repository brings together three connected active-learning contributions. Use the links below to jump directly to each component.
-
-| Component | Purpose | Repository section | Paper |
-| --- | --- | --- | --- |
-| **PALM** | Predicts and explains active-learning learning curves with interpretable parameters. | [PALM](#palm) | [ICCV 2025 paper](https://openaccess.thecvf.com/content/ICCV2025/html/Machnio_To_Label_or_Not_to_Label_PALM_-_A_Predictive_ICCV_2025_paper.html) |
-| **ALDA** | Turns PALM pilot forecasts into risk-aware deployment recommendations. | [ALDA](#alda) | Official workshop link forthcoming |
-| **Mechanism-Driven Theory** | Upcoming operational-proxy, phase-transition, and hard-switch implementation. | [Coming next](#mechanism-driven-theory) | [ECCV 2026 preprint](https://arxiv.org/abs/2607.00144) |
+1. **[PALM](#palm)** — a predictive model for active-learning learning curves. [Paper (ICCV 2025)](https://openaccess.thecvf.com/content/ICCV2025/html/Machnio_To_Label_or_Not_to_Label_PALM_-_A_Predictive_ICCV_2025_paper.html)
+2. **[ALDA](#alda)** — a deployment advisor that uses PALM outputs to recommend a method for a target performance level; accepted for oral presentation at the EMA4MICCAI Workshops. Official workshop link forthcoming.
+3. **[Mechanism-Driven Theory](#mechanism-driven-theory)** — the next planned repository extension, covering computational proxies, phase analysis, and a hard-switch baseline. [Preprint (ECCV 2026)](https://arxiv.org/abs/2607.00144)
 
 <table>
 <tr>
@@ -32,6 +24,11 @@ PALM provides a **predictive description** of learning dynamics from partial obs
 </tr>
 </table>
 
+# 🌴 [ICCV25] PALM: *Performance Analysis of Active Learning Models*
+
+This is the **official repository of “To Label or Not to Label: PALM – A Predictive Model for Evaluating Sample Efficiency in Active Learning Models”**, presented at **ICCV 2025**.
+
+The goal of PALM is to provide a unified and interpretable mathematical model designed to **predict and analyze the behavior of Active Learning (AL) methods**.
 
 <div style="display: flex; justify-content: center;">
   <img src="Page 2.png" alt="PALM curve visualization" style="max-width: 100%; height: auto;" />
