@@ -8,7 +8,7 @@ This repository brings together three connected active-learning contributions:
 
 1. **PALM** — a predictive model for active-learning learning curves.
 2. **ALDA** — a deployment advisor that uses PALM outputs to recommend a method for a target performance level; accepted for oral presentation at the EMA4MICCAI Workshops.
-3. **Mechanism-Driven Theory** — computational proxies, phase analysis, and a hard-switch baseline; its implementation is being added on this release branch.
+3. **Mechanism-Driven Theory** — the next planned repository extension, covering computational proxies, phase analysis, and a hard-switch baseline.
 
 <table>
 <tr>
@@ -172,56 +172,207 @@ After running `PALM.py`, the following files will be saved in the directory spec
 
 ## 🩺 ALDA: Active Learning Deployment Advisor
 
-ALDA is the companion deployment-advisor workflow for PALM. It helps choose
-between active-learning methods after observing their early learning curves:
+ALDA was accepted for **oral presentation at the EMA4MICCAI Workshops** under the title:
+
+> *How Many Labels Are Enough? ALDA: Active Learning Deployment Advisor for Medical Image Classification*
+
+<p align="center">
+  <a href="fig_ALDA.pdf">
+    <img src="fig_ALDA.png" alt="ALDA deployment-advisor workflow" width="900" />
+  </a>
+</p>
+
+<p align="center"><em>ALDA converts pilot learning curves into a risk-aware active-learning deployment recommendation. Click the figure for the PDF version.</em></p>
+
+**ALDA turns early learning-curve forecasts into prospective Active Learning deployment decisions.**
+
+Instead of asking which Active Learning method performs best after the full annotation experiment has already been completed, ALDA asks a deployment-oriented question:
+
+> **Given a short pilot, which Active Learning strategy should we continue with, and how many labels are expected to be needed to reach the required performance?**
+
+ALDA evaluates several candidate Active Learning strategies from partial learning trajectories and estimates:
+
+- whether each strategy is expected to reach a required target performance;
+- the annotation budget required to reach that target;
+- how sensitive this budget is to uncertainty in the target;
+- and which strategy provides the best trade-off between annotation cost and deployment robustness.
+
+The workflow is:
 
 ```text
-active-learning experiment → PALM fit per method → ALDA recommendation
+pilot Active Learning trajectories
+            ↓
+      PALM curve fitting
+            ↓
+ feasibility + annotation-cost estimation
+            ↓
+   deployment-risk analysis
+            ↓
+      ALDA recommendation
 ```
+---
 
-For every candidate method, ALDA reads the PALM output, fits the observed
-trajectory in a common cumulative-label space, and estimates the label budget
-needed to reach a target score. It recommends the reachable method with the
-lowest estimated budget.
+### 🔍 What ALDA estimates
 
-ALDA was accepted for oral presentation at the EMA4MICCAI Workshops under the
-title *Active Learning Deployment Advisor for Medical Image Classification*.
+For every candidate Active Learning method \(m\), ALDA fits the PALM learning curve to the early pilot results:
 
-### What ALDA needs
+$$
+A(B) =
+A_{\max} \cdot
+\left[
+1 -
+(1-\delta)^{
+\left(
+\frac{B}{b}+\alpha
+\right)^\beta
+}
+\right],
+$$
 
-The recommended interface consumes one output directory from `PALM.py` for
-each candidate method. Each directory must contain:
+where \(B\) is the cumulative annotation budget and
+\(\theta_m=\{A_{\max},\delta,\alpha,\beta\}\) are fitted from the observed pilot trajectory.
+
+The fitted curve is then used to estimate three deployment quantities.
+
+#### 1. Feasibility
+
+Let \(\tau\) denote the minimum performance required for deployment.
+
+A method is considered feasible if
+
+$$
+A_{\max}^{(m)} \geq \tau.
+$$
+
+Methods whose predicted performance ceiling lies below the target are flagged as infeasible before additional annotation resources are committed.
+
+#### 2. Absolute annotation cost
+
+For each feasible method, ALDA estimates the minimum number of labels required to reach the target:
+
+$$
+B_{\mathrm{abs}}^{(m)}(\tau)
+=
+\min
+\left\{
+B :
+A_m(B) \geq \tau
+\right\}.
+$$
+
+This converts the predicted learning curve into an interpretable deployment quantity:
+
+> **How many expert annotations are expected to be needed?**
+
+#### 3. Deployment window
+
+The deployment target may not be known exactly and can change after clinical validation, expert consultation, or deployment requirements are revised.
+
+Given an uncertainty interval
+
+$$
+\tau \pm \Delta\tau,
+$$
+
+ALDA defines the deployment window
+
+$$
+W^{(m)}
+=
+B_{\mathrm{abs}}^{(m)}(\tau+\Delta\tau)
+-
+B_{\mathrm{abs}}^{(m)}(\tau-\Delta\tau).
+$$
+
+A small \(W\) indicates that the estimated annotation requirement is relatively stable when the target changes. A large \(W\) indicates a threshold-sensitive strategy whose annotation cost may increase substantially after even a small revision of the required performance.
+
+---
+
+### 🎯 Risk-aware recommendation
+
+Selecting the method with the smallest predicted annotation cost alone can be unstable when several strategies have nearly identical costs.
+
+ALDA therefore first identifies the lowest predicted cost
+
+$$
+B_{\min}
+=
+\min_{m \in \mathcal{M}_{\mathrm{feas}}}
+B_{\mathrm{abs}}^{(m)}(\tau),
+$$
+
+and constructs a set of cost-competitive methods
+
+$$
+\mathcal{C}_{\eta}
+=
+\left\{
+m :
+\frac{
+B_{\mathrm{abs}}^{(m)}(\tau)-B_{\min}
+}{
+B_{\min}
+}
+\leq \eta
+\right\},
+$$
+
+where \(\eta\) defines the tolerated relative increase in annotation cost.
+
+Among these near-optimal methods, ALDA recommends the strategy with the smallest deployment window:
+
+$$
+m^*
+=
+\arg\min_{m\in\mathcal{C}_{\eta}}
+W^{(m)}.
+$$
+
+Thus:
+
+- **\(B_{\mathrm{abs}}\)** determines which methods are annotation-efficient;
+- **\(W\)** determines which cost-competitive method is most robust to changes in the deployment target.
+
+ALDA therefore does not simply select the method with the highest final performance or the smallest nominal label budget. It provides a **risk-aware deployment recommendation**.
+
+---
+
+### 📥 What ALDA needs
+
+The recommended interface consumes one output directory from `PALM.py` for each candidate method.
+
+Each PALM directory should contain:
 
 | File | Produced by PALM | Used by ALDA |
-| --- | --- | --- |
-| `palm_params.json` | Fit metadata, including dataset, method, and acquisition budget | Identifies and aligns methods |
-| `y_avg.npy` | Mean score trajectory across selected runs | Fits the ALDA decision model |
+|------|------------------|--------------|
+| `palm_params.json` | PALM fit metadata, dataset, method, and acquisition budget | Identifies and aligns candidate methods |
+| `y_avg.npy` | Mean observed learning trajectory across repeated runs | Used for ALDA curve fitting and deployment estimation |
 
-Run all candidate methods on the same dataset, task, evaluation metric, and
-data split. The methods may use different acquisition batch sizes; ALDA uses
-the budget stored by PALM to compare them in cumulative labeled samples.
+Candidate methods should be evaluated using the same:
 
-### Installation
+- dataset;
+- train/test split;
+- model and training protocol;
+- evaluation metric;
+- experimental setting.
 
-The ALDA core requires Python, NumPy, and SciPy. If you are using the bundled
-Deep-AL framework, install its dependencies from the repository root:
+Different acquisition batch sizes can be used. ALDA performs the comparison in terms of **cumulative labeled samples**.
 
-```bash
-pip install -r deep-al/requirements.txt
-```
+---
 
-For standalone PALM fitting, install at least:
+### ⚙️ Installation
 
-```bash
-pip install numpy scipy matplotlib
-```
+The ALDA core requires only Python, NumPy, and SciPy.
 
-### Quick start
+If you are using this full repository, install all necessary PALM dependencies from above.
 
-#### 1. Run your candidate active-learning methods
+---
 
-Each run should produce `plot_episode_yvalues.npy` under the output layout
-already supported by `PALM.py`:
+### 🚀 Quick Start
+
+#### 1. Run the candidate Active Learning methods
+
+Each run should produce `plot_episode_yvalues.npy` using the output structure already supported by `PALM.py`:
 
 ```text
 results/CIFAR10/resnet18/
@@ -230,11 +381,13 @@ results/CIFAR10/resnet18/
 ├── coreset_1/plot_episode_yvalues.npy
 └── coreset_2/plot_episode_yvalues.npy
 ```
+At least four unique trajectory points are required for fitting. In practice, larger pilot prefixes provide more reliable extrapolation; the ALDA experiments evaluate pilot fractions between 10% and 30%.
 
-#### 2. Fit PALM once per method
+#### 2. Fit PALM for every candidate method
 
-From the repository root, create a separate PALM output directory for every
-method. Set `--budget_size` to the number of labels acquired per AL episode.
+Create a separate PALM output directory for each strategy.
+
+Set `--budget_size` to the number of samples acquired during one Active Learning episode.
 
 ```bash
 python PALM.py \
@@ -256,10 +409,11 @@ python PALM.py \
   --out_dir palm_outputs/coreset
 ```
 
-#### 3. Ask ALDA for a recommendation
+#### 3. Ask ALDA for a deployment recommendation
 
-Choose a target in percentage points. For example, a target of `80` means
-80% accuracy when PALM scores are percentages.
+Provide the PALM output directories for the candidate methods and specify the required performance target.
+
+For example, when scores are stored as percentages, `--target 80` corresponds to a target accuracy of 80%.
 
 ```bash
 python deep-al/tools/alda/advisor.py \
@@ -268,17 +422,35 @@ python deep-al/tools/alda/advisor.py \
   --target 80
 ```
 
-ALDA writes two files:
+The default target uncertainty is 5 percentage points (`--delta-target 5`) for percentage scores and 0.05 for fractional scores. The default cost non-inferiority band is `--eta 0.05`, meaning that a method may require up to 5% more labels than the minimum-cost method and still be considered cost-competitive.
+
+The score and target must use the same scale:
+
+```text
+scores: 0–100  → target: 80
+scores: 0–1    → target: 0.80
+```
+
+---
+
+### 📦 ALDA Outputs
+
+ALDA stores the deployment analysis in the directory specified by `--output-dir`.
 
 | File | Contents |
-| --- | --- |
-| `alda_fits.csv` | PALM parameters, fit quality, observed final score, and estimated budget at the target for every method |
-| `alda_advice.csv` | One recommendation per dataset, its target, decision reason, and estimated label budget |
+|------|----------|
+| `alda_fits.csv` | Method-level PALM parameters, RMSE, feasibility, `B_abs`, deployment window `W`, `W / B_abs`, and cost-competitive membership (`C_eta`) |
+| `alda_advice.csv` | Target, target uncertainty, `eta`, selected method, `selected_B_abs`, `selected_W`, and decision reason |
 
-### Advising from partial trajectories
+These outputs allow the candidate strategies and their predicted deployment requirements to be inspected before committing the remaining annotation budget.
 
-To simulate a decision made before the full experiment is complete, pass only
-the first *N* observations from each PALM output:
+---
+
+### 🔬 Advising from Partial Trajectories
+
+ALDA is designed for **prospective method selection**.
+
+To simulate a deployment decision made before the full Active Learning experiment is complete, only the first \(N\) observations from each trajectory can be used:
 
 ```bash
 python deep-al/tools/alda/advisor.py \
@@ -288,36 +460,48 @@ python deep-al/tools/alda/advisor.py \
   --max-points 8
 ```
 
-At least four unique trajectory points are required for a fit. Early fits are
-estimates, not guarantees: use the fit quality in `alda_fits.csv`, compare
-methods under matched experimental conditions, and validate a recommendation
-before committing a large annotation budget.
+This corresponds to the practical setting in which candidate methods are evaluated during a short pilot and ALDA is used to decide which strategy should receive the remaining annotation budget.
 
-### Decision rule
+At least four unique trajectory points are required for fitting.
 
-For each dataset, ALDA:
+Early learning-curve predictions are estimates rather than guarantees. Recommendations should therefore be interpreted together with curve-fit quality, deployment sensitivity, and domain-specific validation.
 
-1. Fits the PALM curve to every candidate method’s observed mean trajectory.
-2. Estimates the cumulative labels required to reach the requested target.
-3. Recommends the method with the lowest reachable estimate.
-4. If no method is estimated to reach the target, recommends the method with
-   the highest estimated asymptotic score and records that fallback reason.
+---
 
-This makes the decision criterion explicit. It does not claim that a fitted
-curve eliminates experimental uncertainty or replaces domain validation.
+### 🧪 Pilot-Based Deployment
 
-### Optional CSV interface
+The intended ALDA workflow is:
 
-Use `--input` only when curves come from an external active-learning framework
-and cannot be fitted by this repository’s `PALM.py` workflow. The CSV must
-contain these columns:
+1. Run several candidate Active Learning strategies during a short pilot.
+2. Fit PALM to the partial trajectory of each method.
+3. Estimate whether each candidate can reach the required target.
+4. Estimate its required annotation cost \(B_{\mathrm{abs}}\).
+5. Evaluate sensitivity to target uncertainty using \(W\).
+6. Identify methods with near-optimal annotation cost.
+7. Recommend the most robust strategy among them.
+8. Continue annotation using the selected Active Learning method.
+
+In our medical-imaging experiments, ALDA identifies label-efficient strategies from approximately **15–30% of the intended annotation trajectory**, with recommendations typically stabilizing as additional pilot observations become available.
+
+---
+
+### 📄 Optional CSV Interface
+
+The standard workflow is:
+
+```text
+Active Learning runs → PALM → ALDA
+```
+
+However, ALDA can also analyze learning curves generated by an external Active Learning framework.
+
+Use `--input` with a CSV containing:
 
 ```text
 dataset,method,cumulative_budget,score
 ```
 
-Scores may be proportions (`0`–`1`) or percentages (`0`–`100`); the target
-must use the same scale as the input.
+For example:
 
 ```bash
 python deep-al/tools/alda/advisor.py \
@@ -326,39 +510,32 @@ python deep-al/tools/alda/advisor.py \
   --target 0.80
 ```
 
-### Reproducibility and privacy
+Scores may be represented either as proportions (`0–1`) or percentages (`0–100`), but the target must use the same scale.
 
-ALDA does not require datasets, images, checkpoints, or patient-derived data
-to be committed to this repository. The forthcoming paper-reproduction layer
-will add dataset acquisition instructions, split manifests, configurations,
-and validation tools. Do not commit local run folders or generated ALDA/PALM
-outputs to the public repository.
 
-### Validation
+### ✅ Validation
 
-Run the synthetic smoke test from `deep-al/tools`:
+A synthetic smoke test is available under `deep-al/tools`:
 
 ```bash
 python alda/tests/test_advisor.py
 ```
 
-The test covers both the optional CSV path and the standard direct
-`PALM.py → ALDA` handoff.
+The test covers both:
 
-### Citation
+```text
+PALM output → ALDA
+```
 
-Citation metadata and the official paper link will be added once available.
-Until then, please refer to the paper title above and cite PALM when using the
-underlying learning-curve model.
+and the optional external CSV interface.
 
 ---
 
-## 🧭 Mechanism-Driven Theory
+## 🧭 Coming Next: Mechanism-Driven Theory
 
-The next component will add the computational proxies, phase/regime analysis,
-and proxy-derived `hard_switch` baseline from the mechanism-driven theory
-paper. It deliberately excludes ALPS, urgency estimation, and soft-allocation
-work, which belong to separate research projects.
+The next repository extension will add the implementation accompanying *A Mechanism-Driven Theory of Phase Transitions in Active Learning* (ECCV 2026), including operational proxies, phase-transition analysis, segmented-regression transition detection, and the proxy-derived switching baseline.
+
+This component is not implemented in the current ALDA release.
 
 ---
 
@@ -378,6 +555,29 @@ This repository builds on concepts and frameworks designed by [TypiClust](https:
   author={Machnio, Julia and Nielsen, Mads and Ghazi, Mostafa Mehdipour},
   journal={Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
   year={2025}
+}
+```
+
+
+### 🩺 ALDA (EMA4MICCAI Workshops 2026)
+
+```bibtex
+@inproceedings{machnio2026alda,
+  title={How Many Labels Are Enough? ALDA: Active Learning Deployment Advisor for Medical Image Classification},
+  author={Machnio, Julia and Nielsen, Mads and Ghazi, Mostafa Mehdipour},
+  booktitle={EMA4MICCAI Workshop at MICCAI},
+  year={2026}
+}
+```
+
+### 🧭 Mechanism-Driven Theory (ECCV 2026)
+
+```bibtex
+@article{machnio2026mechanism,
+  title={A Mechanism-Driven Theory of Phase Transitions in Active Learning},
+  author={Machnio, Julia and Nielsen, Mads and Ghazi, Mostafa Mehdipour},
+  journal={arXiv preprint arXiv:2607.00144},
+  year={2026}
 }
 ```
 
