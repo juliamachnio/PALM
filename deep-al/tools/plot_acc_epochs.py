@@ -117,7 +117,7 @@ def plot_multiple_methods(x_file, y_dict, save_path=None):
         plt.show()
 
 
-base_path = "/home/kgc221/rankk/output"
+base_path = "{your_path}/output"
 dataset = "CIFAR10"
 methods = ["random_nf", "random_ff_simclr"]
 # methods = ["random_nf", "margin_nf", "random_ff", "margin_ff",]
@@ -153,7 +153,7 @@ print(f"x_file: {x_file}")
 print(f"y_dict: {y_dict}")
 
 
-save_path = "/home/kgc221/rankk/pplots/cifar10_20AL_simclr.png"
+save_path = "{your_path}/pplots/cifar10_20AL_simclr.png"
 
 # Run the plotting function
 plot_multiple_methods(x_file, y_dict, save_path)

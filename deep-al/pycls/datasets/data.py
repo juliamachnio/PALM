@@ -18,6 +18,13 @@ from pycls.datasets.imbalanced_cifar import IMBALANCECIFAR10, IMBALANCECIFAR100
 from pycls.datasets.sampler import IndexedSequentialSampler
 from pycls.datasets.tiny_imagenet import TinyImageNet
 from pycls.datasets.imagenet import ImageNet
+from pycls.datasets.isic2019 import ISIC2019
+from pycls.datasets.busi import BUSI
+from pycls.datasets.brisc2025 import BRISC2025
+from pycls.datasets.fetal_planes import FetalPlanes
+
+DATASETS_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(DATASETS_DIR, "..", "..", ".."))
 
 logger = lu.get_logger(__name__)
 
@@ -156,6 +163,23 @@ class Data:
                 ops = [transforms.RandomCrop(32, padding=4)]
                 norm_mean = [0.4376, 0.4437, 0.4728]
                 norm_std = [0.1980, 0.2010, 0.1970]
+            elif self.dataset == "ISIC2019":
+                # Use ImageNet-style preprocessing (works well for medical RGB too)
+                ops = [transforms.RandomResizedCrop(224, scale=(0.5, 1.))]
+                norm_mean = [0.485, 0.456, 0.406]
+                norm_std  = [0.229, 0.224, 0.225]
+            elif self.dataset == "BUSI":
+                ops = [transforms.RandomResizedCrop(224, scale=(0.5, 1.))]
+                norm_mean = [0.485, 0.456, 0.406]
+                norm_std  = [0.229, 0.224, 0.225]
+            elif self.dataset == "BRISC2025":
+                ops = [transforms.RandomResizedCrop(224, scale=(0.5, 1.))]
+                norm_mean = [0.485, 0.456, 0.406]
+                norm_std  = [0.229, 0.224, 0.225]
+            elif self.dataset == "FETALPLANES":
+                ops = [transforms.RandomResizedCrop(224, scale=(0.5, 1.))]
+                norm_mean = [0.485, 0.456, 0.406]
+                norm_std  = [0.229, 0.224, 0.225]
             else:
                 raise NotImplementedError
 
@@ -174,7 +198,15 @@ class Data:
             ops.append(transforms.Normalize(norm_mean, norm_std))
 
             if self.eval_mode:
-                ops = [ops[0], transforms.ToTensor(), transforms.Normalize(norm_mean, norm_std)]
+                if self.dataset in ["ISIC2019", "BRISC2025", "FETALPLANES"]:
+                    # Deterministic eval-time preprocessing for these medical
+                    # datasets (BUSI intentionally excluded, matching the
+                    # original experiments): resize-then-center-crop instead
+                    # of the training-time RandomResizedCrop.
+                    eval_ops = [transforms.Resize(256), transforms.CenterCrop(224)]
+                else:
+                    eval_ops = [ops[0]]
+                ops = eval_ops + [transforms.ToTensor(), transforms.Normalize(norm_mean, norm_std)]
             else:
                 print("Preprocess Operations Selected ==> ", ops)
                 # logger.info("Preprocess Operations Selected ==> ", ops)
@@ -245,7 +277,7 @@ class Data:
             return tiny, len(tiny)
         elif self.dataset in ['IMAGENET50', 'IMAGENET100', 'IMAGENET200']:
             dataset_number = self.dataset.replace("IMAGENET", "")
-            base_path = "/home/ju-ma/PycharmProjects/rankk/scan/data/imagenet_subsets"
+            base_path = os.path.join(PROJECT_ROOT, "scan", "data", "imagenet_subsets")
             subset_file = os.path.join(base_path, f"imagenet_{dataset_number}.txt")
 
             if isTrain:
@@ -259,7 +291,6 @@ class Data:
                 # tiny = datasets.ImageFolder(save_dir+'/val', transform=preprocess_steps)
                 print("save dir", save_dir)
                 save_dir = os.path.join(save_dir, "ILSVRC/Data/CLS-LOC/val/")
-                # subset_file = ('/home/ju-ma/PycharmProjects/rankk/scan/data/imagenet_subsets/imagenet_50.txt')
                 imagenet = ImageNet(save_dir, subset_file=subset_file, split='val', transform=preprocess_steps, test_transform=test_preprocess_steps,
                                       num_classes=self.cfg.MODEL.NUM_CLASSES, only_features=only_features, dataset = self.dataset, method=self.setup)
             return imagenet, len(imagenet)
@@ -271,6 +302,44 @@ class Data:
         elif self.dataset ==  'IMBALANCED_CIFAR100':
             im_cifar100 = IMBALANCECIFAR100(save_dir, train=isTrain, transform=preprocess_steps, test_transform=test_preprocess_steps)
             return im_cifar100, len(im_cifar100)
+
+        elif self.dataset == "ISIC2019":
+            isic = ISIC2019(
+                save_dir,
+                train=isTrain,
+                transform=preprocess_steps,
+                default_transform=test_preprocess_steps,
+                only_features=only_features,
+                method=self.setup,
+            )
+            return isic, len(isic)
+
+        elif self.dataset == "BUSI":
+            busi = BUSI(
+                save_dir,
+                train=isTrain,
+                transform=preprocess_steps,
+                default_transform=test_preprocess_steps,
+            )
+            return busi, len(busi)
+
+        elif self.dataset == "BRISC2025":
+            brisc = BRISC2025(
+                save_dir,
+                train=isTrain,
+                transform=preprocess_steps,
+                default_transform=test_preprocess_steps,
+            )
+            return brisc, len(brisc)
+
+        elif self.dataset == "FETALPLANES":
+            fetal = FetalPlanes(
+                save_dir,
+                train=isTrain,
+                transform=preprocess_steps,
+                default_transform=test_preprocess_steps,
+            )
+            return fetal, len(fetal)
 
         else:
             print("Either the specified {} dataset is not added or there is no if condition in getDataset function of Data class".format(self.dataset))

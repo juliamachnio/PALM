@@ -11,7 +11,7 @@ TEST:
   SPLIT: test
   BATCH_SIZE: 200
   IM_SIZE: 32
-  MODEL_PATH: '/home/ju-ma/PycharmProjects/rankk/output/CIFAR10/resnet18/2025_1_22_113204_284539/episode_5/vlBest_acc_77_model_epoch_0066.pyth'
+  MODEL_PATH: '{your_path}/output/CIFAR10/resnet18/<exp_dir>/<episode>/<checkpoint>.pyth'  # fill in the checkpoint produced by your own training run
 DATA_LOADER:
   NUM_WORKERS: 4
 CUDNN:

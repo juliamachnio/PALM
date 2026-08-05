@@ -14,7 +14,7 @@ embedding_display_names = {
     "simclr": "SimCLR"
 }
 
-base_path = "/home/ju-ma/PycharmProjects/rankk/output"
+base_path = "{your_path}/output"
 dataset = "IMAGENET50"
 # methods = ["random_ff"]
 # methods = ["uncertainty_ff"]

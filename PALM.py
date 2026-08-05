@@ -16,7 +16,7 @@ where:
 x_eff can be either:
   (a) episode index x (1..N), or
   (b) cumulative normalised budget [(x*B)/b where B=x*b if b was fixed for all rounds]
-        if --use_cumulative_budget is set
+        if --x_mode cumulative_normalized is set
 
 The script:
   1) loads multiple runs’ y-values (.npy),
@@ -170,7 +170,7 @@ def main():
         f = lambda xv, A, d, a, b: palm_model(xv, A, d, a, b)
         model_used = "PALM (episodes)"
     else:
-        f = lambda xv, A, d, a, b: palm_model_cum(xv, args.budget_size, A, d, a, b)
+        f = lambda xv, A, d, a, b: palm_model_cum(xv, args.budget_size, args.budget_size, A, d, a, b)
         model_used = f"PALM (cumulative-normalized, b={args.budget_size:g})"
 
     popt, pcov = curve_fit(f, x, y_avg, p0=p0, bounds=(bounds_lo, bounds_hi), maxfev=50000)
@@ -190,7 +190,9 @@ def main():
         "method": args.method,
         "episodes": len(x),
         "mode": model_used,
-        "budget_size": args.budget_size if args.x_mode == "cumulative_normalized" else None,
+        # Always persist the acquisition budget: ALDA uses it to turn episode
+        # indices in y_avg.npy into comparable cumulative label budgets.
+        "budget_size": float(args.budget_size),
         "A_max": float(A_max),
         "delta": float(delta),
         "alpha": float(alpha),
