@@ -46,6 +46,29 @@ class PhaseAnalysis:
     transitions: tuple[float, ...]
 
 
+def hard_switch_schedule(analysis: PhaseAnalysis) -> dict[str, object]:
+    """Create the paper's three-stage TCU schedule from two detected transitions."""
+    if len(analysis.transitions) < 2:
+        raise ValueError("hard_switch requires at least two proxy-derived global transitions")
+    thresholds = tuple(float(value) for value in analysis.transitions[:2])
+    if thresholds[0] >= thresholds[1]:
+        raise ValueError("hard_switch thresholds must be strictly increasing")
+    return {
+        "schema": "mechanistic-hard-switch-v1",
+        "source": "proxy_phase_analysis",
+        "thresholds": list(thresholds),
+        "stages": ["typiclust", "coreset", "uncertainty"],
+    }
+
+
+def hard_switch_stage(labeled_budget: float, thresholds: tuple[float, float]) -> str:
+    """Return the exact boundary dispatch for a valid hard-switch schedule."""
+    first, second = thresholds
+    if not 0 < first < second:
+        raise ValueError("hard_switch thresholds must be strictly increasing and positive")
+    return "typiclust" if labeled_budget < first else "coreset" if labeled_budget < second else "uncertainty"
+
+
 def _validate(budgets: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     x = np.asarray(budgets, dtype=float).reshape(-1)
     y = np.asarray(values, dtype=float).reshape(-1)

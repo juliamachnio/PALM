@@ -200,6 +200,7 @@ _C.ACTIVE_LEARNING.MAX_ITER = 5 # Max AL iterations
 _C.ACTIVE_LEARNING.MAX_DELTA = 1.1 # Max Delta for DCoM algorithm
 _C.ACTIVE_LEARNING.DELTA_RESOLUTION = 0.05 # Delta resolution for the binary search in DCoM algorithm
 _C.ACTIVE_LEARNING.FINE_TUNE = True # continue after AL from existing model or from scratch
+_C.ACTIVE_LEARNING.HARD_SWITCH_SCHEDULE = '' # proxy-derived JSON schedule for --al hard_switch
 
 # ---------------------------------------------------------------------------- #
 # Common train/test data loader options

@@ -73,6 +73,7 @@ def argparser():
     parser.add_argument('--a_logistic', default=0.8, type=float)
     parser.add_argument('--last_episode', default=0, type=int)
     parser.add_argument('--lsh-method', help='LSH method: faiss_ivf, faiss_hnsw, or annoy', default='faiss_ivf', type=str)
+    parser.add_argument('--hard-switch-schedule', default='', type=str, help='Proxy-derived hard-switch JSON schedule')
 
 
     return parser
@@ -778,6 +779,7 @@ if __name__ == "__main__":
     cfg.ACTIVE_LEARNING.A_LOGISTIC = args.a_logistic
     cfg.ACTIVE_LEARNING.K_LOGISTIC = args.k_logistic
     cfg.LSH_METHOD = args.lsh_method
+    cfg.ACTIVE_LEARNING.HARD_SWITCH_SCHEDULE = args.hard_switch_schedule
 
     start_time = time.time()
     main(cfg)

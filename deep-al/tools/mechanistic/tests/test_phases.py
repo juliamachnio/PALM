@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from mechanistic.phases import analyze_proxy_trajectory, contiguous_phases, fit_segmented_proxy, standardize_proxy_values
+from mechanistic.phases import PhaseAnalysis, analyze_proxy_trajectory, contiguous_phases, fit_segmented_proxy, hard_switch_schedule, hard_switch_stage, standardize_proxy_values
 
 
 class PhaseAnalysisTest(unittest.TestCase):
@@ -45,6 +45,19 @@ class PhaseAnalysisTest(unittest.TestCase):
             max_breakpoints=1, min_segment_points=3, breakpoint_neighborhood=1.0,
         )
         self.assertEqual(analysis.transitions, ())
+
+    def test_hard_switch_schedule_requires_two_proxy_transitions(self) -> None:
+        analysis = PhaseAnalysis({}, (), {}, (), (100.0, 300.0))
+        self.assertEqual(hard_switch_schedule(analysis)["thresholds"], [100.0, 300.0])
+        with self.assertRaisesRegex(ValueError, "at least two"):
+            hard_switch_schedule(PhaseAnalysis({}, (), {}, (), (100.0,)))
+
+    def test_hard_switch_dispatches_exactly_at_boundaries(self) -> None:
+        thresholds = (100.0, 300.0)
+        self.assertEqual(hard_switch_stage(99, thresholds), "typiclust")
+        self.assertEqual(hard_switch_stage(100, thresholds), "coreset")
+        self.assertEqual(hard_switch_stage(299, thresholds), "coreset")
+        self.assertEqual(hard_switch_stage(300, thresholds), "uncertainty")
 
 
 if __name__ == "__main__":
