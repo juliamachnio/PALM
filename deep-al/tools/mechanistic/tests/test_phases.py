@@ -1,6 +1,9 @@
 """Synthetic checks for mechanism-driven phase analysis."""
 
 import sys
+import csv
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -8,6 +11,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mechanistic.phases import PhaseAnalysis, analyze_proxy_trajectory, contiguous_phases, fit_segmented_proxy, hard_switch_schedule, hard_switch_stage, standardize_proxy_values
+from mechanistic.export_schedule import export_schedule, read_proxy_csv
 
 
 class PhaseAnalysisTest(unittest.TestCase):
@@ -58,6 +62,19 @@ class PhaseAnalysisTest(unittest.TestCase):
         self.assertEqual(hard_switch_stage(100, thresholds), "coreset")
         self.assertEqual(hard_switch_stage(299, thresholds), "coreset")
         self.assertEqual(hard_switch_stage(300, thresholds), "uncertainty")
+
+    def test_portable_csv_reader_and_schedule_export(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "proxies.csv"
+            with path.open("w", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["budget", "a", "b"])
+                writer.writeheader()
+                writer.writerows({"budget": i, "a": i, "b": 20 - i} for i in range(1, 5))
+            budgets, proxies = read_proxy_csv(path)
+            self.assertEqual(budgets.tolist(), [1.0, 2.0, 3.0, 4.0])
+            self.assertEqual(set(proxies), {"a", "b"})
+            with self.assertRaisesRegex(ValueError, "at least two proxy-derived"):
+                export_schedule(path, Path(directory) / "schedule.json")
 
 
 if __name__ == "__main__":
