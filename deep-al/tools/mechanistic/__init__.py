@@ -1,6 +1,6 @@
-"""Standalone operational proxies for mechanism-driven AL analysis."""
+"""Public mechanism-driven analysis utilities."""
 
-from .phases import Phase, PhaseAnalysis, SegmentedFit, analyze_proxy_trajectory, hard_switch_schedule, hard_switch_stage
-from .proxies import ProxySnapshot, compute_proxy_snapshot
+from .global_regression import GlobalPhaseAnalysis, fit_global_phase_model
+from .proxies import PAPER_PROXY_COLUMNS, ProxySnapshot, compute_proxy_snapshot
 
-__all__ = ["Phase", "PhaseAnalysis", "ProxySnapshot", "SegmentedFit", "analyze_proxy_trajectory", "compute_proxy_snapshot", "hard_switch_schedule", "hard_switch_stage"]
+__all__ = ["GlobalPhaseAnalysis", "PAPER_PROXY_COLUMNS", "ProxySnapshot", "compute_proxy_snapshot", "fit_global_phase_model"]

@@ -4,6 +4,7 @@ from datetime import datetime
 import argparse
 import numpy as np
 import torch
+import torch.nn.functional as functional
 from copy import deepcopy
 import re
 import shutil
@@ -31,6 +32,8 @@ import pycls.utils.metrics as mu
 import pycls.utils.net as nu
 from pycls.utils.meters import TestMeter, TrainMeter, ValMeter
 from test_model import save_plot_values, plot_arrays
+from mechanistic.proxies import compute_proxy_snapshot
+from mechanistic.record import write_proxy_record
 
 logger = lu.get_logger(__name__)
 
@@ -74,10 +77,50 @@ def argparser():
     parser.add_argument('--last_episode', default=0, type=int)
     parser.add_argument('--lsh-method', help='LSH method: faiss_ivf, faiss_hnsw, or annoy', default='faiss_ivf', type=str)
     parser.add_argument('--hard-switch-schedule', default='', type=str, help='Proxy-derived hard-switch JSON schedule')
+    parser.add_argument('--record-mechanistic-proxies', action='store_true', help='Write paper-defined proxy trajectory during active-learning training')
+    parser.add_argument('--mechanistic-features', default='', type=str, help='Fixed train-set embedding .npy aligned with dataset indices (required when recording proxies)')
+    parser.add_argument('--mechanistic-confidence-delta', default=0.05, type=float, help='Failure probability in the paper confidence term')
 
 
     return parser
 
+
+
+def _losses_on_indexes(model, data_obj, train_data, indexes, cfg):
+    """Per-example CE losses with the model before or after retraining."""
+    indexes = np.asarray(indexes, dtype=np.int64)
+    if len(indexes) == 0:
+        raise ValueError("cannot measure empirical risk on an empty acquired batch")
+    loader = data_obj.getSequentialDataLoader(indexes, cfg.TRAIN.BATCH_SIZE, train_data)
+    was_training = model.training
+    no_aug = getattr(train_data, "no_aug", None)
+    if no_aug is not None:
+        train_data.no_aug = True
+    device = next(model.parameters()).device
+    model.eval()
+    values = []
+    with torch.no_grad():
+        for inputs, labels in loader:
+            logits = model(inputs.to(device=device, dtype=torch.float32))
+            values.append(functional.cross_entropy(logits, labels.to(device=device), reduction="none").cpu().numpy())
+    if no_aug is not None:
+        train_data.no_aug = no_aug
+    model.train(was_training)
+    return np.concatenate(values)
+
+
+def _compute_mechanistic_snapshot(model, data_obj, train_data, labeled_set, features, previous_active, pre_losses, confidence_budget, cfg):
+    """Compute the paper-named proxy vector after the current query."""
+    post_losses = _losses_on_indexes(model, data_obj, train_data, previous_active, cfg)
+    labels = np.asarray(train_data.targets)
+    return compute_proxy_snapshot(
+        annotation_budget=len(labeled_set), pre_losses=pre_losses, post_losses=post_losses,
+        labeled_labels=labels[np.asarray(labeled_set, dtype=np.int64)], reference_labels=labels,
+        labeled_features=features[np.asarray(labeled_set, dtype=np.int64)], reference_features=features,
+        parameter_arrays=(parameter.detach().cpu().numpy() for parameter in model.parameters()),
+        confidence_delta=args.mechanistic_confidence_delta,
+        confidence_annotation_budget=confidence_budget,
+    )
 
 def is_eval_epoch(cur_epoch):
     """Determines if the model should be evaluated at the current epoch."""
@@ -161,6 +204,13 @@ def main(cfg):
 
     cfg.EXP_DIR = exp_dir
 
+    mechanistic_features = None
+    proxy_trajectory_path = os.path.join(cfg.EXP_DIR, "mechanistic_proxy_records.csv")
+    if args.record_mechanistic_proxies:
+        if not args.mechanistic_features:
+            raise ValueError("--record-mechanistic-proxies requires --mechanistic-features")
+        mechanistic_features = np.load(args.mechanistic_features)
+
     # Save the config file in EXP_DIR
     dump_cfg(cfg)
 
@@ -176,6 +226,11 @@ def main(cfg):
     test_data, test_size = data_obj.getDataset(save_dir=cfg.DATASET.ROOT_DIR, isTrain=False, isDownload=True)
     print(test_size)
     print("test_data size", len(test_data))
+    if mechanistic_features is not None:
+        if mechanistic_features.ndim != 2 or len(mechanistic_features) != train_size:
+            raise ValueError("--mechanistic-features must be a two-dimensional array aligned with the training dataset")
+        if not np.isfinite(mechanistic_features).all():
+            raise ValueError("--mechanistic-features must contain only finite values")
     cfg.ACTIVE_LEARNING.INIT_L_RATIO = args.initial_size / train_size
     print("\nDataset {} Loaded Sucessfully.\nTotal Train Size: {} and Total Test Size: {}\n".format(cfg.DATASET.NAME, train_size, test_size))
     logger.info("Dataset {} Loaded Sucessfully. Total Train Size: {} and Total Test Size: {}\n".format(cfg.DATASET.NAME, train_size, test_size))
@@ -318,6 +373,20 @@ def main(cfg):
         logger.info("EPISODE {} Test Accuracy {}.\n".format(cur_episode, test_acc))
 
 
+        clf_model = None
+        pending_active = pending_pre_losses = None
+        training_budget = len(lSet)
+        if args.record_mechanistic_proxies:
+            clf_model = model_builder.build_model(cfg)
+            clf_model = cu.load_checkpoint(checkpoint_file, clf_model)
+            previous_dir = os.path.join(cfg.EXP_DIR, f"episode_{cur_episode - 1}")
+            previous_active = os.path.join(previous_dir, "activeSet.npy")
+            previous_losses = os.path.join(previous_dir, "mechanistic_pre_losses.npy")
+            if os.path.isfile(previous_active) and os.path.isfile(previous_losses):
+                pending_active, pending_pre_losses = np.load(previous_active), np.load(previous_losses)
+            else:
+                logger.info("No prior acquired batch is available; proxy recording starts after the next retraining episode.")
+
         # No need to perform active sampling in the last episode iteration
         if cur_episode == cfg.ACTIVE_LEARNING.MAX_ITER:
             # Save current lSet, uSet in the final episode directory
@@ -354,9 +423,15 @@ def main(cfg):
         print("======== ACTIVE SAMPLING ========\n")
         logger.info("======== ACTIVE SAMPLING ========\n")
         al_obj = ActiveLearning(data_obj, cfg)
-        clf_model = model_builder.build_model(cfg)
-        clf_model = cu.load_checkpoint(checkpoint_file, clf_model)
+        if clf_model is None:
+            clf_model = model_builder.build_model(cfg)
+            clf_model = cu.load_checkpoint(checkpoint_file, clf_model)
         activeSet, new_uSet = al_obj.sample_from_uSet(clf_model, lSet, uSet, train_data)
+        if args.record_mechanistic_proxies:
+            np.save(
+                os.path.join(cfg.EPISODE_DIR, "mechanistic_pre_losses.npy"),
+                _losses_on_indexes(clf_model, data_obj, train_data, activeSet, cfg),
+            )
 
         # Save current lSet, new_uSet and activeSet in the episode directory
         data_obj.saveSets(lSet, uSet, activeSet, cfg.EPISODE_DIR)
@@ -364,6 +439,16 @@ def main(cfg):
         # Add activeSet to lSet, save new_uSet as uSet and update dataloader for the next episode
         lSet = np.append(lSet, activeSet)
         uSet = new_uSet
+        if args.record_mechanistic_proxies and pending_active is not None:
+            snapshot = _compute_mechanistic_snapshot(
+                clf_model, data_obj, train_data, lSet, mechanistic_features,
+                pending_active, pending_pre_losses, training_budget, cfg,
+            )
+            saved_path = write_proxy_record(
+                proxy_trajectory_path, snapshot, episode=cur_episode, method=args.al, seed=args.seed,
+                annotation_budget=len(lSet), test_accuracy=test_acc,
+            )
+            logger.info("Wrote mechanism-driven proxy record to %s", saved_path)
 
         lSet_loader = data_obj.getIndexesDataLoader(indexes=lSet, batch_size=cfg.TRAIN.BATCH_SIZE, data=train_data)
         valSet_loader = data_obj.getIndexesDataLoader(indexes=valSet, batch_size=cfg.TRAIN.BATCH_SIZE, data=train_data)

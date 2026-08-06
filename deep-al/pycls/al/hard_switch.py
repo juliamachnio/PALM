@@ -16,9 +16,9 @@ class HardSwitch:
         self.budgetSize = int(budgetSize)
         path = Path(str(cfg.ACTIVE_LEARNING.HARD_SWITCH_SCHEDULE))
         if not path.is_file():
-            raise FileNotFoundError("hard_switch requires --hard-switch-schedule produced by proxy phase analysis")
+            raise FileNotFoundError("hard_switch requires --hard-switch-schedule created from the mechanism phase analysis")
         payload = json.loads(path.read_text())
-        if payload.get("schema") != "mechanistic-hard-switch-v1" or payload.get("source") != "proxy_phase_analysis":
+        if payload.get("schema") != "mechanistic-hard-switch-v1" or payload.get("source") not in {"proxy_phase_analysis", "mechanistic_global_regression"}:
             raise ValueError("hard_switch schedule is not a proxy-phase-analysis artifact")
         thresholds = payload.get("thresholds")
         if not isinstance(thresholds, list) or len(thresholds) != 2 or not 0 < thresholds[0] < thresholds[1]:
@@ -33,7 +33,7 @@ class HardSwitch:
         episode_dir = getattr(self.cfg, "EPISODE_DIR", "")
         if episode_dir:
             path = Path(episode_dir) / "hard_switch_diagnostics.json"
-            path.write_text(json.dumps({"method": "hard_switch", "source": "proxy_phase_analysis", "current_labeled": len(self.lSet), "thresholds": self.thresholds, "stage": stage}, indent=2))
+            path.write_text(json.dumps({"method": "hard_switch", "source": "mechanistic_global_regression", "current_labeled": len(self.lSet), "thresholds": self.thresholds, "stage": stage}, indent=2))
 
     def select_samples(self, clf_model, train_dataset):
         stage = self.stage()
