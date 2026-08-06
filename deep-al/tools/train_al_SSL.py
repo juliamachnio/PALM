@@ -69,6 +69,7 @@ def argparser():
     parser.add_argument('--initial_delta', help='Relevant only for ProbCover and DCoM', default=0.6, type=float)
     parser.add_argument('--k_logistic', default=50, type=int)
     parser.add_argument('--a_logistic', default=0.8, type=float)
+    parser.add_argument('--hard-switch-schedule', default='', type=str, help='Proxy-derived hard-switch JSON schedule')
 
     return parser
 
@@ -706,5 +707,6 @@ if __name__ == "__main__":
     cfg.RNG_SEED = args.seed
     cfg.MODEL.LINEAR_FROM_FEATURES = args.linear_from_features
     cfg.ACTIVE_LEARNING.A_LOGISTIC = args.a_logistic
+    cfg.ACTIVE_LEARNING.HARD_SWITCH_SCHEDULE = args.hard_switch_schedule
     cfg.ACTIVE_LEARNING.K_LOGISTIC = args.k_logistic
     main(cfg)

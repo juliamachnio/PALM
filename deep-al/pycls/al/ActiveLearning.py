@@ -82,6 +82,10 @@ class ActiveLearning:
             tpc = TypiClust(self.cfg, lSet, uSet, budgetSize=self.cfg.ACTIVE_LEARNING.BUDGET_SIZE, is_scan=is_scan)
             activeSet, uSet = tpc.select_samples()
 
+        elif self.cfg.ACTIVE_LEARNING.SAMPLING_FN.lower() == "hard_switch":
+            from .hard_switch import HardSwitch
+            activeSet, uSet = HardSwitch(self.cfg, self.dataObj, lSet, uSet, self.cfg.ACTIVE_LEARNING.BUDGET_SIZE).select_samples(clf_model, trainDataset)
+
         elif self.cfg.ACTIVE_LEARNING.SAMPLING_FN.lower() in ["prob_cover", 'probcover']:
             from .prob_cover import ProbCover
             probcov = ProbCover(self.cfg, lSet, uSet, budgetSize=self.cfg.ACTIVE_LEARNING.BUDGET_SIZE,

@@ -1,11 +1,12 @@
 # Repository Overview
 
-This repository brings together two connected active-learning contributions:
+This repository brings together three connected active-learning contributions:
 
 | Component | Purpose | Repository section | Paper |
 | --- | --- | --- | --- |
 | **PALM** | Predicts and explains active-learning learning curves with interpretable parameters. | [PALM](#palm) | [ICCV 2025 paper](https://openaccess.thecvf.com/content/ICCV2025/html/Machnio_To_Label_or_Not_to_Label_PALM_-_A_Predictive_ICCV_2025_paper.html) |
-| **ALDA** | Turns PALM pilot forecasts into risk-aware deployment recommendations. | [ALDA](#alda) | Official workshop link forthcoming |
+| **ALDA** | Turns PALM pilot forecasts into risk-aware deployment recommendations. | [ALDA](#alda) | [Oral @ EMA 4 MICCAI 2026 preprint ](https://arxiv.org/pdf/2608.03511) |
+| **Mechanism-Driven Theory** | Records operational proxies, fits global phases, and evaluates a fixed hard-switch baseline. | [Mechanism-Driven Theory](#mechanism-driven-theory) | [ECCV 2026 preprint](https://arxiv.org/pdf/2607.00144) |
 
 # 🌴 [ICCV25] PALM: *Performance Analysis of Active Learning Models*
 
@@ -18,9 +19,9 @@ The goal of PALM is to provide a unified and interpretable mathematical model de
 <td width="50%" valign="top">
 
 PALM provides a **predictive description** of learning dynamics from partial observations, enabling:
-- Estimation of **future performance** from early-stage results  
-- **Principled comparison** across different AL strategies  
-- Quantitative analysis of key factors affecting sample efficiency  
+- Estimation of **future performance** from early-stage results
+- **Principled comparison** across different AL strategies
+- Quantitative analysis of key factors affecting sample efficiency
 
 </td>
 <td width="50%" valign="top" align="center">
@@ -62,7 +63,7 @@ $$
 
 PALM can be used in two main ways:
 
-1. **Standalone mode:** as a separate script integrated into your AL framework.  
+1. **Standalone mode:** as a separate script integrated into your AL framework.
    Input required: cumulative budget values per episode and corresponding accuracy results.
 
 2. **Framework mode (recommended):** as a follow-up step inside the [TypiClust framework](https://github.com/avihu111/TypiClust/tree/main) for reproducible evaluation.
@@ -82,7 +83,7 @@ conda install numpy scipy matplotlib
 
 ### 🧩 Environment Installation — Case 2 (Framework mode)
 
-To use PALM as a part of AL framework please refer to [USAGE_Typiclust](typiclust_original_instructions/USAGE_Typiclust.md). Note that original TypiClust uses python 3.7. If you prefere to use python 3.11, [here](Python_311_instalation_guide.md) is the additional guide. 
+To use PALM as a part of AL framework please refer to [USAGE_Typiclust](typiclust_original_instructions/USAGE_Typiclust.md). Note that original TypiClust uses python 3.7. If you prefere to use python 3.11, [here](Python_311_instalation_guide.md) is the additional guide.
 
 ### ▶️ Running PALM
 In both Cases, PALM.py automatically searches for .npy files in the following structure:
@@ -95,7 +96,7 @@ In both Cases, PALM.py automatically searches for .npy files in the following st
 ├── <METHOD_2>_2/plot_episode_yvalues.npy
 └── ...
 ```
-Each .npy file should be a 1D array of accuracies recorded after each Active Learning episode. The <METHOD_1> is name of your AL method and _N is the repetition under the same settings. 
+Each .npy file should be a 1D array of accuracies recorded after each Active Learning episode. The <METHOD_1> is name of your AL method and _N is the repetition under the same settings.
 
 
 **A) Fit on episode index (default mode) - Example**
@@ -135,7 +136,7 @@ python PALM.py \
 
 ### 📦 Output Files
 
-After running `PALM.py`, the following files will be saved in the directory specified by `--out_dir`  
+After running `PALM.py`, the following files will be saved in the directory specified by `--out_dir`
 (default: `./palm_fit_out`):
 
 | File | Description |
@@ -472,9 +473,99 @@ Scores may be represented either as proportions (`0–1`) or percentages (`0–1
 
 ---
 
+<a id="mechanism-driven-theory"></a>
+
+## 🧭 [ECCV26] Mechanism-Driven Theory of Phase Transitions in Active Learning
+
+<p align="center">
+  <a href="abstract_4datasets.pdf">
+    <img src="abstract_4datasets.png" alt="Mechanism-driven phase transitions across four datasets" width="100%" />
+  </a>
+</p>
+
+
+The workflow used in the paper:
+
+```text
+completed AL runs across methods and seeds
+                  ↓
+paper-named operational-proxy records
+                  ↓
+global joint segmented regression (DP + BIC)
+                  ↓
+phase boundaries and analysis artifacts
+                  ↓
+two explicitly chosen switch budgets
+                  ↓
+TypiClust → CoreSet → uncertainty (hard-switch example)
+```
+
+### 💁 Operational proxies
+
+Use the standard training runner with a fixed train-set embedding matrix aligned to dataset indices:
+
+```bash
+python deep-al/tools/train_al.py \
+  --cfg deep-al/configs/cifar100/al/RESNET18.yaml \
+  --exp-name R_typiclust_b100_s1 \
+  --al typiclust --budget 100 --seed 1 \
+  --record-mechanistic-proxies \
+  --mechanistic-features /path/to/train_embeddings.npy
+```
+
+Each completed run writes `mechanistic_proxy_records.csv` inside its experiment directory. It contains these columns:
+
+| Field | Meaning |
+| --- | --- |
+| `empirical_risk_reduction` | Change in cross-entropy on the previously acquired batch, before versus after retraining. |
+| `label_discrepancy` | Total-variation discrepancy between labeled and reference label distributions. |
+| `feature_discrepancy` | Mean nearest-neighbour cosine distance from reference embeddings to the labeled set. |
+| `geometric_coverage` | Mean nearest-neighbour cosine distance within the labeled set. |
+| `model_complexity` | Sum of L2 norms of trained parameter tensors. |
+| `confidence_term` | Closed-form confidence term with configurable failure probability. |
+
+`test_accuracy`, `annotation_budget`, `method`, and `seed` are recorded alongside the proxies. The first episode without a previous acquired batch is omitted because empirical-risk reduction is not yet defined.
+
+### 🌎 Global phase analysis
+
+After completing the required runs for all compared methods and seeds, pool their record files and run the joint global regression:
+
+```bash
+python deep-al/tools/mechanistic/analyze_phases.py \
+  --inputs results/typiclust_s1/mechanistic_proxy_records.csv results/coreset_s1/mechanistic_proxy_records.csv \
+  --output-dir mechanism_analysis
+```
+
+The analysis first averages seeds at each `(method, annotation_budget)`, then predicts `true_risk = 1 − test_accuracy` jointly from the six operational proxies. Dynamic programming finds globally shared segment boundaries for each candidate number of segments; BIC selects the final segmentation. It writes:
+
+- `global_phase_analysis.json` — selected segment count, global boundaries, fit criterion, and coefficients.
+- `pooled_phase_records.csv` — seed-averaged records used by the regression.
+
+### 👉 Fixed hard-switch baseline (proof of concept)
+
+Phase analysis informs the two deployment budgets, but the baseline uses explicitly chosen fixed thresholds, matching the experiment implementation. Create its schedule as follows:
+
+```bash
+python deep-al/tools/mechanistic/export_schedule.py \
+  --output hard_switch_schedule.json \
+  --switch-1 5000 \
+  --switch-2 8300 \
+  --phase-analysis mechanism_analysis/global_phase_analysis.json
+
+python deep-al/tools/train_al.py \
+  --cfg deep-al/configs/cifar100/al/RESNET18.yaml \
+  --exp-name R_hard_switch_b100_s1 \
+  --al hard_switch --budget 100 --seed 1 \
+  --hard-switch-schedule hard_switch_schedule.json
+```
+
+`--al hard_switch` dispatches TypiClust below `switch-1`, CoreSet from `switch-1` to `switch-2`, and uncertainty thereafter. It writes `hard_switch_diagnostics.json` in every episode directory.
+
+
+
 ## 📚 Citing this Repository
 
-If you find **PALM** useful in your research, please consider citing our ICCV 2025 paper and the repositories our work builds upon.
+If you find this repository useful in your research, please consider citing our papers and the repositories our work builds upon.
 
 This repository builds on concepts and frameworks designed by [TypiClust](https://github.com/avihu111/TypiClust), [SCAN](https://github.com/wvangansbeke/Unsupervised-Classification), and [Deep-AL](https://github.com/decile-team/deep-active-learning). Please consider citing their work along with ours.
 
@@ -482,7 +573,7 @@ This repository builds on concepts and frameworks designed by [TypiClust](https:
 
 ### 🏝️ PALM (ICCV 2025)
 
-```
+```bibtex
 @article{machnio2025label,
   title={To Label or Not to Label: PALM--A Predictive Model for Evaluating Sample Efficiency in Active Learning Models},
   author={Machnio, Julia and Nielsen, Mads and Ghazi, Mostafa Mehdipour},
@@ -496,9 +587,20 @@ This repository builds on concepts and frameworks designed by [TypiClust](https:
 
 > Citation to be added after the official workshop publication details are available.
 
+### ⚙️ Mechanism-Driven Theory (ECCV 2026) - preprint
+
+```bibtex
+@article{machnio2026mechanism,
+  title={A Mechanism-Driven Theory of Phase Transitions in Active Learning},
+  author={Machnio, Julia and Nielsen, Mads and Ghazi, Mostafa Mehdipour},
+  journal={arXiv preprint arXiv:2607.00144},
+  year={2026}
+}
+```
+
 ### 📘 Related References
 
-```
+```bibtex
 @article{hacohen2022active,
   title={Active learning on a budget: Opposite strategies suit high and low budgets},
   author={Hacohen, Guy and Dekel, Avihu and Weinshall, Daphna},
@@ -514,7 +616,7 @@ This repository builds on concepts and frameworks designed by [TypiClust](https:
 }
 
 @article{mishal2024dcom,
-      title={DCoM: Active Learning for All Learners}, 
+      title={DCoM: Active Learning for All Learners},
       author={Mishal, Inbal and Weinshall, Daphna},
       journal={arXiv preprint arXiv:2407.01804},
       year={2024}
